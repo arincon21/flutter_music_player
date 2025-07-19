@@ -55,6 +55,11 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
+    _audioPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        _playNext();
+      }
+    });
     _loadTracks();
   }
 
@@ -322,20 +327,21 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     return Container(
       key: const ValueKey('normal_header'),
       height: 80,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: const [
-          Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          //Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           Text(
-            'Poli. Top Tracks this Week',
+            'Lista de reproducción',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 16,
+              fontSize: 20,
               fontWeight: FontWeight.w500,
             ),
           ),
-          Icon(Icons.more_horiz, color: Colors.white, size: 24),
+          //Icon(Icons.more_horiz, color: Colors.white, size: 24),
         ],
       ),
     );
@@ -345,27 +351,31 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     return Container(
       key: const ValueKey('expanded_header'),
       height: 80,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.more_horiz, color: Colors.white, size: 20),
+          //const Icon(Icons.more_horiz, color: Colors.white, size: 20),
           Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Playing from',
+                'En reproducción',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
-                  fontSize: 12,
+                  fontSize: 13,
                 ),
               ),
               const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Poli. Top Tracks this Week. All Genres',
+                    'Pantalla de reproducción',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
+                      fontSize: 20,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -373,7 +383,12 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
               ),
             ],
           ),
-          const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 24),
+          GestureDetector(
+            onTap: () {
+              _panelController.close();
+            },
+            child: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 24),
+          ),
         ],
       ),
     );
@@ -388,51 +403,61 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     if (!hasTrack || _isPanelExpanded) {
       return const SizedBox.shrink();
     }
-    return Container(
-      height: 80,
-      margin: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF6B6B),
-              borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onTap: () {
+        _panelController.open();
+      },
+      child: Container(
+        height: 80,
+        margin: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: track!.artwork != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(track.artwork!, fit: BoxFit.cover),
+                    )
+                  : const Center(
+                      child: Icon(Icons.music_note, color: Color(0xFF172438)),
+                    ),
             ),
-            child: track!.artwork != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(track.artwork!, fit: BoxFit.cover),
-                  )
-                : const Center(
-                    child: Icon(Icons.music_note, color: Color(0xFF172438)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    track.title,
+                    style: const TextStyle(color: Color(0xFF172438), fontSize: 14, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(track.title, style: const TextStyle(color: Color(0xFF172438), fontSize: 14, fontWeight: FontWeight.w600)),
-                Text(track.artist, style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
-              ],
+                  Text(track.artist, style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
-            onPressed: canPlayPrev ? _playPrevious : null,
-          ),
-          _MiniPlayerPlayPause(audioPlayer: _audioPlayer),
-          IconButton(
-            icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 24),
-            onPressed: canPlayNext ? _playNext : null,
-          ),
-          const SizedBox(width: 16),
-        ],
+            IconButton(
+              icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
+              onPressed: canPlayPrev ? _playPrevious : null,
+            ),
+            _MiniPlayerPlayPause(audioPlayer: _audioPlayer),
+            IconButton(
+              icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 24),
+              onPressed: canPlayNext ? _playNext : null,
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
       ),
     );
   }

@@ -49,7 +49,7 @@ class TrackListWidget extends StatelessWidget {
   Widget buildAlbumArt(TrackData track) {
     if (track.artwork != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(3),
         child: Image.memory(
           track.artwork!,
           width: 50,
@@ -72,7 +72,7 @@ class TrackListWidget extends StatelessWidget {
       height: 50,
       decoration: BoxDecoration(
         color: trackColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(3),
       ),
       child: const Center(
         child: Icon(
@@ -242,7 +242,7 @@ class TrackListWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -324,6 +324,7 @@ class TrackListWidget extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
