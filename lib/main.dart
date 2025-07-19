@@ -88,24 +88,30 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       if (await Permission.audio.isDenied) {
         final status = await Permission.audio.request();
         permissionGranted = status.isGranted;
+        debugPrint('Permiso audio:  [32m [1m${permissionGranted ? 'concedido' : 'denegado'}\u001b[0m');
       } else {
         permissionGranted = await Permission.audio.isGranted;
+        debugPrint('Permiso audio ya concedido: $permissionGranted');
       }
       if (!permissionGranted) {
         if (await Permission.storage.isDenied) {
           final status = await Permission.storage.request();
           permissionGranted = status.isGranted;
+          debugPrint('Permiso storage: ${permissionGranted ? 'concedido' : 'denegado'}');
         } else {
           permissionGranted = await Permission.storage.isGranted;
+          debugPrint('Permiso storage ya concedido: $permissionGranted');
         }
       }
       if (!permissionGranted && await Permission.manageExternalStorage.isDenied) {
         final status = await Permission.manageExternalStorage.request();
         permissionGranted = status.isGranted;
+        debugPrint('Permiso manageExternalStorage: ${permissionGranted ? 'concedido' : 'denegado'}');
       }
     } else {
       permissionGranted = true;
     }
+    debugPrint('Permiso final: $permissionGranted');
     if (!permissionGranted) return [];
     // Buscar directorios
     List<Directory> searchDirectories = [];
@@ -126,12 +132,15 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     } else {
       Directory appDir = await getApplicationDocumentsDirectory();
       searchDirectories.add(appDir);
+      debugPrint('Directorio app agregado: ${appDir.path}');
     }
     // Buscar archivos MP3
     for (Directory dir in searchDirectories) {
+      debugPrint('Buscando en: ${dir.path}');
       try {
         await for (FileSystemEntity entity in dir.list(recursive: true, followLinks: false)) {
           if (entity is File && entity.path.toLowerCase().endsWith('.mp3')) {
+            debugPrint('MP3 encontrado: ${entity.path}');
             try {
               final canonicalPath = await entity.resolveSymbolicLinks();
               if (foundPaths.add(canonicalPath)) {
@@ -547,10 +556,18 @@ class _ExpandedPlayerContent extends StatelessWidget {
 }
 
 /// Slider y tiempos optimizados para el panel expandido.
-class _PlayerSlider extends StatelessWidget {
+class _PlayerSlider extends StatefulWidget {
   final AudioPlayer audioPlayer;
   final Duration duration;
   const _PlayerSlider({required this.audioPlayer, required this.duration});
+  @override
+  State<_PlayerSlider> createState() => _PlayerSliderState();
+}
+
+class _PlayerSliderState extends State<_PlayerSlider> {
+  double? _dragValue;
+  bool _isDragging = false;
+
   String _formatDuration(int seconds) {
     int minutes = seconds ~/ 60;
     int remainingSeconds = seconds % 60;
@@ -561,14 +578,17 @@ class _PlayerSlider extends StatelessWidget {
     }
     return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Duration>(
-      stream: audioPlayer.positionStream,
+      stream: widget.audioPlayer.positionStream,
       builder: (context, snapshot) {
         final position = snapshot.data ?? Duration.zero;
-        final double sliderMax = duration.inSeconds.toDouble();
-        final double sliderValue = position.inSeconds.clamp(0, sliderMax.toInt()).toDouble();
+        final double sliderMax = widget.duration.inSeconds.toDouble();
+        final double sliderValue = _isDragging
+            ? (_dragValue ?? 0.0)
+            : position.inSeconds.clamp(0, sliderMax.toInt()).toDouble();
         return Column(
           children: [
             Row(
@@ -583,8 +603,20 @@ class _PlayerSlider extends StatelessWidget {
               min: 0.0,
               max: sliderMax > 0 ? sliderMax : 1.0,
               onChanged: sliderMax > 0
+                  ? (value) {
+                      setState(() {
+                        _isDragging = true;
+                        _dragValue = value;
+                      });
+                    }
+                  : null,
+              onChangeEnd: sliderMax > 0
                   ? (value) async {
-                      await audioPlayer.seek(Duration(seconds: value.toInt()));
+                      setState(() {
+                        _isDragging = false;
+                        _dragValue = null;
+                      });
+                      await widget.audioPlayer.seek(Duration(seconds: value.toInt()));
                     }
                   : null,
             ),
