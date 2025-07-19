@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sliding_up_panel2/sliding_up_panel2.dart';
 import 'package:flutter/services.dart';
+import 'track_list_widget.dart';
 
 void main() {
   runApp(MyApp());
@@ -44,8 +45,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
             SlidingUpPanel(
               controller: _panelController,
               minHeight: 120,
-              maxHeight:
-                  MediaQuery.of(context).size.height -
+              maxHeight: MediaQuery.of(context).size.height -
                   100, // Reducido para no cubrir el título
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               color: Color(0xFFFEFFFF),
@@ -133,7 +133,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         child: Column(
           children: [
             _buildHeader(),
-            Expanded(child: _buildTrackList()),
+            Expanded(child: TrackListWidget()),
           ],
         ),
       ),
