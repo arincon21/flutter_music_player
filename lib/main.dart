@@ -1,63 +1,278 @@
+// main.dart
+// Pantalla principal del reproductor de música con integración just_audio y UI profesional.
+
 import 'package:flutter/material.dart';
 import 'package:sliding_up_panel2/sliding_up_panel2.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:audiotags/audiotags.dart';
+import 'package:just_audio/just_audio.dart';
+import 'dart:io';
+import 'dart:typed_data';
 import 'track_list_widget.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
+/// Widget principal de la aplicación.
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Music Player',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: MusicPlayerScreen(),
+      home: const MusicPlayerScreen(),
     );
   }
 }
 
+/// Pantalla principal con reproductor, lista y panel deslizante.
 class MusicPlayerScreen extends StatefulWidget {
+  const MusicPlayerScreen({super.key});
   @override
-  _MusicPlayerScreenState createState() => _MusicPlayerScreenState();
+  State<MusicPlayerScreen> createState() => _MusicPlayerScreenState();
 }
 
 class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
-  PanelController _panelController = PanelController();
-  double _currentPosition = 2.0;
-  bool _isPlaying = true;
+  final PanelController _panelController = PanelController();
+  late final AudioPlayer _audioPlayer;
+  List<TrackData> _trackList = [];
+  int? _currentTrackIndex;
+  bool _isLoading = true;
+  String _loadingMessage = 'Buscando archivos MP3...';
   bool _isPanelExpanded = false;
-  double _panelPosition = 0.0;
+
+  // Streams para sincronización UI/estado
+  Stream<Duration> get _positionStream => _audioPlayer.positionStream;
+  Stream<PlayerState> get _playerStateStream => _audioPlayer.playerStateStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _loadTracks();
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  /// Busca archivos MP3 y extrae metadatos.
+  Future<void> _loadTracks() async {
+    setState(() {
+      _isLoading = true;
+      _loadingMessage = 'Buscando archivos MP3...';
+    });
+    List<TrackData> tracks = await _findTracks();
+    setState(() {
+      _trackList = tracks;
+      _isLoading = false;
+    });
+  }
+
+  /// Busca archivos MP3 en el dispositivo y extrae metadatos.
+  Future<List<TrackData>> _findTracks() async {
+    List<TrackData> trackList = [];
+    Set<String> foundPaths = {};
+    List<File> foundFiles = [];
+    // Permisos
+    bool permissionGranted = false;
+    if (Platform.isAndroid) {
+      if (await Permission.audio.isDenied) {
+        final status = await Permission.audio.request();
+        permissionGranted = status.isGranted;
+      } else {
+        permissionGranted = await Permission.audio.isGranted;
+      }
+      if (!permissionGranted) {
+        if (await Permission.storage.isDenied) {
+          final status = await Permission.storage.request();
+          permissionGranted = status.isGranted;
+        } else {
+          permissionGranted = await Permission.storage.isGranted;
+        }
+      }
+      if (!permissionGranted && await Permission.manageExternalStorage.isDenied) {
+        final status = await Permission.manageExternalStorage.request();
+        permissionGranted = status.isGranted;
+      }
+    } else {
+      permissionGranted = true;
+    }
+    if (!permissionGranted) return [];
+    // Buscar directorios
+    List<Directory> searchDirectories = [];
+    if (Platform.isAndroid) {
+      List<String> commonMusicPaths = [
+        '/storage/emulated/0/Music',
+        '/storage/emulated/0/Download',
+        '/storage/emulated/0/Documents',
+        '/sdcard/Music',
+        '/sdcard/Download',
+      ];
+      for (String path in commonMusicPaths) {
+        Directory dir = Directory(path);
+        if (await dir.exists()) {
+          searchDirectories.add(dir);
+        }
+      }
+    } else {
+      Directory appDir = await getApplicationDocumentsDirectory();
+      searchDirectories.add(appDir);
+    }
+    // Buscar archivos MP3
+    for (Directory dir in searchDirectories) {
+      try {
+        await for (FileSystemEntity entity in dir.list(recursive: true, followLinks: false)) {
+          if (entity is File && entity.path.toLowerCase().endsWith('.mp3')) {
+            try {
+              final canonicalPath = await entity.resolveSymbolicLinks();
+              if (foundPaths.add(canonicalPath)) {
+                foundFiles.add(entity);
+              }
+            } catch (e) {
+              final absolutePath = entity.absolute.path;
+              if (foundPaths.add(absolutePath)) {
+                foundFiles.add(entity);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error al buscar en directorio ${dir.path}: $e');
+      }
+    }
+    // Extraer metadatos
+    for (int i = 0; i < foundFiles.length; i++) {
+      File file = foundFiles[i];
+      try {
+        Tag? tag = await AudioTags.read(file.path);
+        String title = tag?.title?.trim() ?? file.path.split('/').last.replaceAll('.mp3', '');
+        String artist = tag?.trackArtist?.trim() ?? 'Artista desconocido';
+        String album = tag?.album?.trim() ?? 'Álbum desconocido';
+        String genre = tag?.genre?.trim() ?? 'Género desconocido';
+        String? albumArtist = tag?.albumArtist?.trim();
+        int? duration = tag?.duration ?? 222;
+        int? year = tag?.year;
+        int? trackNumber = tag?.trackNumber;
+        Uint8List? artwork = tag?.pictures?.isNotEmpty == true ? tag!.pictures.first.bytes : null;
+        if (title.isEmpty) title = file.path.split('/').last.replaceAll('.mp3', '');
+        trackList.add(TrackData(
+          file: file,
+          title: title,
+          artist: artist,
+          album: album,
+          genre: genre,
+          duration: duration,
+          year: year,
+          trackNumber: trackNumber,
+          albumArtist: albumArtist,
+          artwork: artwork,
+        ));
+      } catch (e) {
+        debugPrint('Error al extraer metadatos de ${file.path}: $e');
+        trackList.add(TrackData(
+          file: file,
+          title: file.path.split('/').last.replaceAll('.mp3', ''),
+          artist: 'Artista desconocido',
+          album: 'Álbum desconocido',
+          genre: 'Género desconocido',
+        ));
+      }
+    }
+    // Ordenar por artista y luego por título
+    trackList.sort((a, b) {
+      int artistComparison = a.artist.toLowerCase().compareTo(b.artist.toLowerCase());
+      if (artistComparison != 0) return artistComparison;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return trackList;
+  }
+
+  /// Maneja la selección de un track desde la lista.
+  /// Si es el mismo track, alterna play/pause. Si es otro, lo carga y reproduce.
+  void _onTrackSelected(int index) async {
+    if (_currentTrackIndex == index) {
+      if (_audioPlayer.playing) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
+      }
+    } else {
+      setState(() {
+        _currentTrackIndex = index;
+      });
+      try {
+        await _audioPlayer.setFilePath(_trackList[index].file.path);
+        await _audioPlayer.play();
+      } catch (e) {
+        debugPrint('Error al reproducir: $e');
+      }
+    }
+  }
+
+  /// Alterna play/pause desde los controles.
+  void _playPause(PlayerState state) async {
+    if (state.playing) {
+      await _audioPlayer.pause();
+    } else {
+      await _audioPlayer.play();
+    }
+  }
+
+  /// Reproduce el siguiente track si existe.
+  void _playNext() {
+    if (_currentTrackIndex != null && _currentTrackIndex! < _trackList.length - 1) {
+      _onTrackSelected(_currentTrackIndex! + 1);
+    }
+  }
+
+  /// Reproduce el track anterior si existe.
+  void _playPrevious() {
+    if (_currentTrackIndex != null && _currentTrackIndex! > 0) {
+      _onTrackSelected(_currentTrackIndex! - 1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // Iconos blancos en la barra de estado
+      value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: Color(0xFF172438),
+        backgroundColor: const Color(0xFF172438),
         body: Stack(
           children: [
-            // Contenido principal (pantalla de tracks)
-            _buildTrackListScreen(),
-            // Panel deslizante
+            _isLoading
+                ? Center(child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(color: Colors.white),
+                      const SizedBox(height: 16),
+                      Text(_loadingMessage, style: const TextStyle(color: Colors.white)),
+                    ],
+                  ))
+                : _buildTrackListScreen(),
             SlidingUpPanel(
               controller: _panelController,
-              minHeight: 120,
-              maxHeight: MediaQuery.of(context).size.height -
-                  100, // Reducido para no cubrir el título
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              color: Color(0xFFFEFFFF),
-              backdropEnabled: false, // Deshabilitado el fondo oscuro
+              minHeight: _currentTrackIndex != null ? 120 : 0,
+              maxHeight: MediaQuery.of(context).size.height - 100,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              color: const Color(0xFFFEFFFF),
+              backdropEnabled: false,
               onPanelSlide: (double pos) {
                 setState(() {
-                  _panelPosition = pos;
                   _isPanelExpanded = pos > 0.5;
                 });
               },
               panelBuilder: () => _buildExpandedPlayer(),
-              body: Container(), // Cuerpo vacío porque usamos Stack
+              body: Container(),
             ),
           ],
         ),
@@ -65,14 +280,43 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
+  /// Construye la pantalla de la lista de tracks.
+  Widget _buildTrackListScreen() {
+    return Container(
+      color: const Color(0xFF172438),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: TrackListWidget(
+                trackList: _trackList,
+                currentPlayingIndex: _currentTrackIndex,
+                onTrackSelected: _onTrackSelected,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Header animado según el estado del panel.
+  Widget _buildHeader() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _isPanelExpanded ? _buildExpandedHeader() : _buildNormalHeader(),
+    );
+  }
+
   Widget _buildNormalHeader() {
     return Container(
-      key: ValueKey('normal_header'),
+      key: const ValueKey('normal_header'),
       height: 80,
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
+        children: const [
           Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           Text(
             'Poli. Top Tracks this Week',
@@ -90,13 +334,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
   Widget _buildExpandedHeader() {
     return Container(
-      key: ValueKey('normal_header'),
+      key: const ValueKey('expanded_header'),
       height: 80,
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(Icons.more_horiz, color: Colors.white, size: 20),
+          const Icon(Icons.more_horiz, color: Colors.white, size: 20),
           Column(
             children: [
               Text(
@@ -106,7 +350,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   fontSize: 12,
                 ),
               ),
-              Row(
+              const Row(
                 children: [
                   Text(
                     'Poli. Top Tracks this Week. All Genres',
@@ -120,448 +364,204 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
               ),
             ],
           ),
-          Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 24),
+          const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 24),
         ],
       ),
     );
   }
 
-  Widget _buildTrackListScreen() {
-    return Container(
-      color: Color(0xFF172438),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(child: TrackListWidget()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return AnimatedSwitcher(
-      duration: Duration(milliseconds: 300),
-      child: _isPanelExpanded ? _buildExpandedHeader() : _buildNormalHeader(),
-    );
-  }
-
-  Widget _buildTrackList() {
-    final tracks = [
-      {
-        'title': 'No Problem (feat. Lil Wayne, 2...',
-        'artist': 'Chance the Rapper',
-        'duration': '19d',
-        'color': Color(0xFFFF6B6B),
-        'category': 'Hiphop Rap',
-      },
-      {
-        'title': 'Lonely ft. Lil Skies (Prod. Chris...',
-        'artist': 'Yung Bans',
-        'duration': '21d',
-        'color': Color(0xFF6B7AFF),
-        'category': 'Hiphop Rap',
-      },
-      {
-        'title': 'Humility (feat. George Benson)',
-        'artist': 'Gorillaz',
-        'duration': '3d',
-        'color': Color(0xFF4ECDC4),
-        'category': 'Alternative',
-      },
-      {
-        'title': 'Fuck Love (feat. Trippie Redd)',
-        'artist': 'XXXTENTACION',
-        'duration': '29d',
-        'color': Color(0xFFE8E8E8),
-        'category': 'Hiphop Rap',
-      },
-      {
-        'title': 'Old Town Road',
-        'artist': '',
-        'duration': '28d',
-        'color': Color(0xFF2C2C2C),
-        'category': 'Hiphop Rap',
-      },
-    ];
-
-    return ListView.builder(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        100,
-      ), // Padding inferior para espacio del miniplayer
-      itemCount: tracks.length,
-      itemBuilder: (context, index) {
-        final track = tracks[index];
-        return Container(
-          margin: EdgeInsets.only(bottom: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: track['color'] as Color,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: track['title'] == 'No Problem (feat. Lil Wayne, 2...'
-                    ? Center(
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF172438),
-                            shape: BoxShape.circle,
+  /// Mini reproductor sincronizado con el estado del player.
+  Widget _buildMiniPlayer() {
+    final track = _currentTrackIndex != null ? _trackList[_currentTrackIndex!] : null;
+    final bool hasTrack = track != null;
+    final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
+    final bool canPlayNext = hasTrack && _currentTrackIndex! < _trackList.length - 1;
+    return StreamBuilder<PlayerState>(
+      stream: _playerStateStream,
+      builder: (context, snapshot) {
+        final state = snapshot.data ?? PlayerState(false, ProcessingState.idle);
+        return StreamBuilder<Duration>(
+          stream: _positionStream,
+          builder: (context, posSnapshot) {
+            // (No usamos la posición aquí, pero podrías mostrar una barra de progreso si quieres)
+            return AnimatedOpacity(
+              opacity: _isPanelExpanded || !hasTrack ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: _isPanelExpanded || !hasTrack ? 0 : 80,
+                margin: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
+                child: !hasTrack
+                    ? const SizedBox.shrink()
+                    : Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6B6B),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: track.artwork != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.memory(track.artwork!, fit: BoxFit.cover),
+                                  )
+                                : const Center(
+                                    child: Icon(Icons.music_note, color: Color(0xFF172438)),
+                                  ),
                           ),
-                        ),
-                      )
-                    : null,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track['title'] as String,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(track.title, style: const TextStyle(color: Color(0xFF172438), fontSize: 14, fontWeight: FontWeight.w600)),
+                                Text(track.artist, style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
+                            onPressed: canPlayPrev ? _playPrevious : null,
+                          ),
+                          IconButton(
+                            icon: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: const Color(0xFF172438), size: 24),
+                            onPressed: hasTrack ? () => _playPause(state) : null,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 24),
+                            onPressed: canPlayNext ? _playNext : null,
+                          ),
+                          const SizedBox(width: 16),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if ((track['artist'] as String).isNotEmpty)
-                      Text(
-                        track['artist'] as String,
-                        style: TextStyle(color: Colors.white60, fontSize: 12),
-                      ),
-                  ],
-                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    track['duration'] as String,
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                  Text(
-                    track['category'] as String,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(width: 8),
-              Icon(Icons.more_vert, color: Colors.white60, size: 20),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildMiniPlayer() {
-    return AnimatedOpacity(
-      opacity: _isPanelExpanded ? 0.0 : 1.0,
-      duration: Duration(milliseconds: 300),
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 300),
-        height: _isPanelExpanded ? 0 : 80,
-        margin: EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Color(0xFFFEFFFF)),
-        child: _isPanelExpanded
-            ? SizedBox.shrink()
-            : Row(
-                children: [
-                  SizedBox(width: 16),
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFF6B6B),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: Color(0xFF172438),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Bag (feat. Yung Bans)',
-                      style: TextStyle(
-                        color: Color(0xFF172438),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.skip_previous, color: Color(0xFF172438), size: 24),
-                  SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isPlaying = !_isPlaying;
-                      });
-                    },
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Color(0xFF172438),
-                      size: 24,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Icon(Icons.skip_next, color: Color(0xFF172438), size: 24),
-                  SizedBox(width: 16),
-                ],
-              ),
-      ),
-    );
-  }
-
+  /// Panel expandido sincronizado con el estado del player.
   Widget _buildExpandedPlayer() {
-    return Column(
-      children: [
-        _buildMiniPlayer(),
-        Expanded(child: _buildPlayerContent()),
-      ],
+    final track = _currentTrackIndex != null ? _trackList[_currentTrackIndex!] : null;
+    final bool hasTrack = track != null;
+    final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
+    final bool canPlayNext = hasTrack && _currentTrackIndex! < _trackList.length - 1;
+    return StreamBuilder<PlayerState>(
+      stream: _playerStateStream,
+      builder: (context, snapshot) {
+        final state = snapshot.data ?? PlayerState(false, ProcessingState.idle);
+        return StreamBuilder<Duration>(
+          stream: _positionStream,
+          builder: (context, posSnapshot) {
+            final position = posSnapshot.data ?? Duration.zero;
+            return Column(
+              children: [
+                _buildMiniPlayer(),
+                if (hasTrack) Expanded(child: _buildPlayerContent(track!, canPlayPrev, canPlayNext, state, position)),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildPlayerContent() {
+  /// Contenido del panel expandido: carátula, info, slider y controles.
+  Widget _buildPlayerContent(TrackData track, bool canPlayPrev, bool canPlayNext, PlayerState state, Duration position) {
+    final duration = track.duration != null ? Duration(seconds: track.duration!) : Duration.zero;
+    final bool hasTrack = track != null;
+    final double sliderMax = hasTrack ? duration.inSeconds.toDouble() : 0.0;
+    final double sliderValue = hasTrack ? position.inSeconds.clamp(0, sliderMax.toInt()).toDouble() : 0.0;
     return Padding(
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          SizedBox(height: 20), // Reducido para dar más espacio
-          _buildAlbumArt(),
-          SizedBox(height: 30),
-          _buildSongInfo(),
-          SizedBox(height: 30),
-          _buildProgressBar(),
-          SizedBox(height: 30),
-          _buildControls(),
-          SizedBox(height: 20),
-          _buildBottomControls(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlbumArt() {
-    return Container(
-      width: 240, // Reducido para ajustarse mejor
-      height: 240,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFF6B6B), Color(0xFFFF8E8E)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
+          const SizedBox(height: 20),
           Container(
-            width: 100,
-            height: 100,
+            width: 240,
+            height: 240,
             decoration: BoxDecoration(
-              color: Color(0xFF172438),
-              borderRadius: BorderRadius.circular(50),
+              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFFFF6B6B),
             ),
-            child: Center(
-              child: Text(
-                '3',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 40,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            child: track.artwork != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.memory(track.artwork!, fit: BoxFit.cover),
+                  )
+                : const Center(
+                    child: Icon(Icons.music_note, color: Colors.white, size: 80),
+                  ),
           ),
-          Positioned(
-            bottom: 15,
-            right: 15,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(4),
+          const SizedBox(height: 30),
+          Text(track.title, style: const TextStyle(color: Color(0xFF172438), fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(track.artist, style: TextStyle(color: Color(0xFF172438).withOpacity(0.6), fontSize: 16)),
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_formatDuration(sliderValue.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+              Text(_formatDuration(sliderMax.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+            ],
+          ),
+          Slider(
+            value: sliderValue,
+            min: 0.0,
+            max: sliderMax > 0 ? sliderMax : 1.0,
+            onChanged: hasTrack && sliderMax > 0
+                ? (value) async {
+                    await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                  }
+                : null,
+          ),
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 32),
+                onPressed: canPlayPrev ? _playPrevious : null,
               ),
-              child: Text(
-                'EXPLICIT',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
+              GestureDetector(
+                onTap: hasTrack ? () => _playPause(state) : null,
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF172438),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
                 ),
               ),
-            ),
+              IconButton(
+                icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 32),
+                onPressed: canPlayNext ? _playNext : null,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSongInfo() {
-    return Column(
-      children: [
-        Text(
-          'Bag (feat. Yung Bans)',
-          style: TextStyle(
-            color: Color(0xFF172438),
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Chance the Rapper',
-          style: TextStyle(
-            color: Color(0xFF172438).withOpacity(0.6),
-            fontSize: 16,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressBar() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '2:10',
-              style: TextStyle(
-                color: Color(0xFF172438).withOpacity(0.6),
-                fontSize: 12,
-              ),
-            ),
-            Text(
-              '4:33',
-              style: TextStyle(
-                color: Color(0xFF172438).withOpacity(0.6),
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 8),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Color(0xFF172438),
-            inactiveTrackColor: Color(0xFF172438).withOpacity(0.2),
-            thumbColor: Color(0xFF172438),
-            trackHeight: 3,
-            thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-          ),
-          child: Slider(
-            value: _currentPosition,
-            max: 4.55,
-            onChanged: (value) {
-              setState(() {
-                _currentPosition = value;
-              });
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        Icon(Icons.skip_previous, color: Color(0xFF172438), size: 32),
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _isPlaying = !_isPlaying;
-            });
-          },
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Color(0xFF172438),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-        ),
-        Icon(Icons.skip_next, color: Color(0xFF172438), size: 32),
-      ],
-    );
-  }
-
-  Widget _buildBottomControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.shuffle, color: Color(0xFF172438), size: 20),
-            SizedBox(width: 4),
-            Text(
-              '2/14',
-              style: TextStyle(color: Color(0xFF172438), fontSize: 12),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Icon(Icons.repeat, color: Color(0xFF172438), size: 20),
-            SizedBox(width: 4),
-            Text(
-              '15',
-              style: TextStyle(color: Color(0xFF172438), fontSize: 12),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Icon(Icons.access_time, color: Color(0xFF172438), size: 20),
-            SizedBox(width: 4),
-            Text(
-              '2:003',
-              style: TextStyle(color: Color(0xFF172438), fontSize: 12),
-            ),
-          ],
-        ),
-        Icon(Icons.add, color: Color(0xFF172438), size: 20),
-      ],
-    );
+  /// Formatea la duración en mm:ss o hh:mm:ss.
+  String _formatDuration(int seconds) {
+    int minutes = seconds ~/ 60;
+    int remainingSeconds = seconds % 60;
+    if (minutes >= 60) {
+      int hours = minutes ~/ 60;
+      int remainingMinutes = minutes % 60;
+      return '${hours}:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }
