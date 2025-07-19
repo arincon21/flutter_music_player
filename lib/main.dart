@@ -47,6 +47,10 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   String _loadingMessage = 'Buscando archivos MP3...';
   bool _isPanelExpanded = false;
 
+  // Buscador
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = '';
+
   // Streams para sincronización UI/estado
   Stream<Duration> get _positionStream => _audioPlayer.positionStream;
   Stream<PlayerState> get _playerStateStream => _audioPlayer.playerStateStream;
@@ -61,11 +65,17 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       }
     });
     _loadTracks();
+    _searchController.addListener(() {
+      setState(() {
+        _searchText = _searchController.text.trim().toLowerCase();
+      });
+    });
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -296,15 +306,41 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
   /// Construye la pantalla de la lista de tracks.
   Widget _buildTrackListScreen() {
+    // Filtrar la lista según el texto de búsqueda
+    List<TrackData> filteredList = _searchText.isEmpty
+        ? _trackList
+        : _trackList.where((track) {
+            return track.title.toLowerCase().contains(_searchText) ||
+                   (track.artist.toLowerCase().contains(_searchText));
+          }).toList();
     return Container(
       color: const Color(0xFF172438),
       child: SafeArea(
         child: Column(
           children: [
             _buildHeader(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Buscar por título o artista...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white),
+                  filled: true,
+                  fillColor: const Color(0xFF22304A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                ),
+              ),
+            ),
             Expanded(
               child: TrackListWidget(
-                trackList: _trackList,
+                trackList: filteredList,
                 currentPlayingIndex: _currentTrackIndex,
                 onTrackSelected: _onTrackSelected,
               ),
@@ -408,9 +444,12 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         _panelController.open();
       },
       child: Container(
-        height: 80,
-        margin: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
+        height: 120,
+        margin: const EdgeInsets.all(0),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEFFFF),
+          borderRadius: BorderRadius.circular(30),
+        ),
         child: Row(
           children: [
             const SizedBox(width: 16),
@@ -419,7 +458,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
               height: 48,
               decoration: BoxDecoration(
                 color: const Color(0xFFFF6B6B),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(30),
               ),
               child: track!.artwork != null
                   ? ClipRRect(
@@ -446,6 +485,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             IconButton(
               icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
               onPressed: canPlayPrev ? _playPrevious : null,

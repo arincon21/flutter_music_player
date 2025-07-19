@@ -270,20 +270,19 @@ class TrackListWidget extends StatelessWidget {
         ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
             itemCount: trackList.length,
             itemBuilder: (context, index) {
               final track = trackList[index];
               return GestureDetector(
                 onTap: () => onTrackSelected(index),
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    border: currentPlayingIndex == index
-                        ? Border.all(color: const Color(0xFF6B7AFF), width: 2)
-                        : null,
-                    borderRadius: BorderRadius.circular(8),
+                    color: currentPlayingIndex == index
+                        ? const Color(0xFFFFFFFF).withOpacity(0.05)
+                        : Colors.transparent,
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   child: Row(
                     children: [
                       buildAlbumArt(track),
