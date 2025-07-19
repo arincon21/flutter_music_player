@@ -376,109 +376,128 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     final bool hasTrack = track != null;
     final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
     final bool canPlayNext = hasTrack && _currentTrackIndex! < _trackList.length - 1;
-    return StreamBuilder<PlayerState>(
-      stream: _playerStateStream,
-      builder: (context, snapshot) {
-        final state = snapshot.data ?? PlayerState(false, ProcessingState.idle);
-        return StreamBuilder<Duration>(
-          stream: _positionStream,
-          builder: (context, posSnapshot) {
-            // (No usamos la posición aquí, pero podrías mostrar una barra de progreso si quieres)
-            return AnimatedOpacity(
-              opacity: _isPanelExpanded || !hasTrack ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: _isPanelExpanded || !hasTrack ? 0 : 80,
-                margin: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
-                child: !hasTrack
-                    ? const SizedBox.shrink()
-                    : Row(
-                        children: [
-                          const SizedBox(width: 16),
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF6B6B),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: track.artwork != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.memory(track.artwork!, fit: BoxFit.cover),
-                                  )
-                                : const Center(
-                                    child: Icon(Icons.music_note, color: Color(0xFF172438)),
-                                  ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(track.title, style: const TextStyle(color: Color(0xFF172438), fontSize: 14, fontWeight: FontWeight.w600)),
-                                Text(track.artist, style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
-                            onPressed: canPlayPrev ? _playPrevious : null,
-                          ),
-                          IconButton(
-                            icon: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: const Color(0xFF172438), size: 24),
-                            onPressed: hasTrack ? () => _playPause(state) : null,
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 24),
-                            onPressed: canPlayNext ? _playNext : null,
-                          ),
-                          const SizedBox(width: 16),
-                        ],
-                      ),
-              ),
-            );
-          },
-        );
-      },
+    if (!hasTrack || _isPanelExpanded) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      height: 80,
+      margin: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(color: Color(0xFFFEFFFF)),
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6B6B),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: track!.artwork != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(track.artwork!, fit: BoxFit.cover),
+                  )
+                : const Center(
+                    child: Icon(Icons.music_note, color: Color(0xFF172438)),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(track.title, style: const TextStyle(color: Color(0xFF172438), fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(track.artist, style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 24),
+            onPressed: canPlayPrev ? _playPrevious : null,
+          ),
+          _MiniPlayerPlayPause(audioPlayer: _audioPlayer),
+          IconButton(
+            icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 24),
+            onPressed: canPlayNext ? _playNext : null,
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
     );
   }
 
-  /// Panel expandido sincronizado con el estado del player.
+  // Panel expandido sincronizado con el estado del player.
   Widget _buildExpandedPlayer() {
     final track = _currentTrackIndex != null ? _trackList[_currentTrackIndex!] : null;
     final bool hasTrack = track != null;
     final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
     final bool canPlayNext = hasTrack && _currentTrackIndex! < _trackList.length - 1;
+    return hasTrack
+        ? Column(
+            children: [
+              _buildMiniPlayer(),
+              Expanded(child: _ExpandedPlayerContent(
+                track: track!,
+                canPlayPrev: canPlayPrev,
+                canPlayNext: canPlayNext,
+                audioPlayer: _audioPlayer,
+                onPlayPrevious: _playPrevious,
+                onPlayNext: _playNext,
+              )),
+            ],
+          )
+        : const SizedBox.shrink();
+  }
+}
+
+// --- Clases auxiliares al nivel superior ---
+
+/// Botón play/pause optimizado para el minireproductor.
+class _MiniPlayerPlayPause extends StatelessWidget {
+  final AudioPlayer audioPlayer;
+  const _MiniPlayerPlayPause({required this.audioPlayer});
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<PlayerState>(
-      stream: _playerStateStream,
+      stream: audioPlayer.playerStateStream,
       builder: (context, snapshot) {
         final state = snapshot.data ?? PlayerState(false, ProcessingState.idle);
-        return StreamBuilder<Duration>(
-          stream: _positionStream,
-          builder: (context, posSnapshot) {
-            final position = posSnapshot.data ?? Duration.zero;
-            return Column(
-              children: [
-                _buildMiniPlayer(),
-                if (hasTrack) Expanded(child: _buildPlayerContent(track!, canPlayPrev, canPlayNext, state, position)),
-              ],
-            );
+        return IconButton(
+          icon: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: const Color(0xFF172438), size: 24),
+          onPressed: () async {
+            if (state.playing) {
+              await audioPlayer.pause();
+            } else {
+              await audioPlayer.play();
+            }
           },
         );
       },
     );
   }
+}
 
-  /// Contenido del panel expandido: carátula, info, slider y controles.
-  Widget _buildPlayerContent(TrackData track, bool canPlayPrev, bool canPlayNext, PlayerState state, Duration position) {
+/// Contenido del panel expandido optimizado.
+class _ExpandedPlayerContent extends StatelessWidget {
+  final TrackData track;
+  final bool canPlayPrev;
+  final bool canPlayNext;
+  final AudioPlayer audioPlayer;
+  final VoidCallback onPlayPrevious;
+  final VoidCallback onPlayNext;
+  const _ExpandedPlayerContent({
+    required this.track,
+    required this.canPlayPrev,
+    required this.canPlayNext,
+    required this.audioPlayer,
+    required this.onPlayPrevious,
+    required this.onPlayNext,
+  });
+  @override
+  Widget build(BuildContext context) {
     final duration = track.duration != null ? Duration(seconds: track.duration!) : Duration.zero;
-    final bool hasTrack = track != null;
-    final double sliderMax = hasTrack ? duration.inSeconds.toDouble() : 0.0;
-    final double sliderValue = hasTrack ? position.inSeconds.clamp(0, sliderMax.toInt()).toDouble() : 0.0;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -505,46 +524,19 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
           const SizedBox(height: 8),
           Text(track.artist, style: TextStyle(color: Color(0xFF172438).withOpacity(0.6), fontSize: 16)),
           const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatDuration(sliderValue.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
-              Text(_formatDuration(sliderMax.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
-            ],
-          ),
-          Slider(
-            value: sliderValue,
-            min: 0.0,
-            max: sliderMax > 0 ? sliderMax : 1.0,
-            onChanged: hasTrack && sliderMax > 0
-                ? (value) async {
-                    await _audioPlayer.seek(Duration(seconds: value.toInt()));
-                  }
-                : null,
-          ),
+          _PlayerSlider(audioPlayer: audioPlayer, duration: duration),
           const SizedBox(height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               IconButton(
                 icon: Icon(Icons.skip_previous, color: canPlayPrev ? const Color(0xFF172438) : Colors.grey, size: 32),
-                onPressed: canPlayPrev ? _playPrevious : null,
+                onPressed: canPlayPrev ? onPlayPrevious : null,
               ),
-              GestureDetector(
-                onTap: hasTrack ? () => _playPause(state) : null,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF172438),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
-                ),
-              ),
+              _ExpandedPlayerPlayPause(audioPlayer: audioPlayer),
               IconButton(
                 icon: Icon(Icons.skip_next, color: canPlayNext ? const Color(0xFF172438) : Colors.grey, size: 32),
-                onPressed: canPlayNext ? _playNext : null,
+                onPressed: canPlayNext ? onPlayNext : null,
               ),
             ],
           ),
@@ -552,8 +544,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       ),
     );
   }
+}
 
-  /// Formatea la duración en mm:ss o hh:mm:ss.
+/// Slider y tiempos optimizados para el panel expandido.
+class _PlayerSlider extends StatelessWidget {
+  final AudioPlayer audioPlayer;
+  final Duration duration;
+  const _PlayerSlider({required this.audioPlayer, required this.duration});
   String _formatDuration(int seconds) {
     int minutes = seconds ~/ 60;
     int remainingSeconds = seconds % 60;
@@ -563,5 +560,70 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       return '${hours}:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
     }
     return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Duration>(
+      stream: audioPlayer.positionStream,
+      builder: (context, snapshot) {
+        final position = snapshot.data ?? Duration.zero;
+        final double sliderMax = duration.inSeconds.toDouble();
+        final double sliderValue = position.inSeconds.clamp(0, sliderMax.toInt()).toDouble();
+        return Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_formatDuration(sliderValue.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+                Text(_formatDuration(sliderMax.toInt()), style: TextStyle(color: const Color(0xFF172438).withOpacity(0.6), fontSize: 12)),
+              ],
+            ),
+            Slider(
+              value: sliderValue,
+              min: 0.0,
+              max: sliderMax > 0 ? sliderMax : 1.0,
+              onChanged: sliderMax > 0
+                  ? (value) async {
+                      await audioPlayer.seek(Duration(seconds: value.toInt()));
+                    }
+                  : null,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Botón play/pause optimizado para el panel expandido.
+class _ExpandedPlayerPlayPause extends StatelessWidget {
+  final AudioPlayer audioPlayer;
+  const _ExpandedPlayerPlayPause({required this.audioPlayer});
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<PlayerState>(
+      stream: audioPlayer.playerStateStream,
+      builder: (context, snapshot) {
+        final state = snapshot.data ?? PlayerState(false, ProcessingState.idle);
+        return GestureDetector(
+          onTap: () async {
+            if (state.playing) {
+              await audioPlayer.pause();
+            } else {
+              await audioPlayer.play();
+            }
+          },
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF172438),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(state.playing ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
+          ),
+        );
+      },
+    );
   }
 }
