@@ -39,11 +39,11 @@ class TrackListWidget extends StatelessWidget {
   final void Function(int) onTrackSelected;
 
   const TrackListWidget({
-    Key? key,
+    super.key,
     required this.trackList,
     required this.currentPlayingIndex,
     required this.onTrackSelected,
-  }) : super(key: key);
+  });
 
   /// Construye la carátula del álbum o un ícono por defecto.
   Widget buildAlbumArt(TrackData track) {
@@ -106,9 +106,9 @@ class TrackListWidget extends StatelessWidget {
     if (minutes >= 60) {
       final int hours = minutes ~/ 60;
       final int remainingMinutes = minutes % 60;
-      return '${hours}:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+      return '$hours:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
     }
-    return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
+    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
   /// Formatea el tamaño del archivo en B, KB o MB.

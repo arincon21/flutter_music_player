@@ -11,6 +11,7 @@ import 'package:just_audio/just_audio.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'track_list_widget.dart';
+import 'package:marquee/marquee.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,6 +48,11 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   String _loadingMessage = 'Buscando archivos MP3...';
   bool _isPanelExpanded = false;
 
+  // --- NUEVO: Estados de repetición y aleatorio ---
+  bool _isShuffle = false;
+  RepeatMode _repeatMode = RepeatMode.off;
+  List<int> _shuffledIndices = [];
+
   // Buscador
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
@@ -59,9 +65,18 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
-    _audioPlayer.playerStateStream.listen((state) {
+    _audioPlayer.playerStateStream.listen((state) async {
       if (state.processingState == ProcessingState.completed) {
-        _playNext();
+        if (_repeatMode == RepeatMode.one && _currentTrackIndex != null) {
+          try {
+            await _audioPlayer.seek(Duration.zero);
+            await _audioPlayer.play();
+          } catch (e) {
+            debugPrint('Error al repetir la pista: $e');
+          }
+        } else {
+          _playNext();
+        }
       }
     });
     _loadTracks();
@@ -198,11 +213,12 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         int? duration = tag?.duration ?? 222;
         int? year = tag?.year;
         int? trackNumber = tag?.trackNumber;
-        Uint8List? artwork = tag?.pictures?.isNotEmpty == true
+        Uint8List? artwork = tag?.pictures.isNotEmpty == true
             ? tag!.pictures.first.bytes
             : null;
-        if (title.isEmpty)
+        if (title.isEmpty) {
           title = file.path.split('/').last.replaceAll('.mp3', '');
+        }
         trackList.add(
           TrackData(
             file: file,
@@ -250,16 +266,23 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       } else {
         await _audioPlayer.play();
       }
-    } else {
-      setState(() {
-        _currentTrackIndex = index;
-      });
-      try {
-        await _audioPlayer.setFilePath(_trackList[index].file.path);
-        await _audioPlayer.play();
-      } catch (e) {
-        debugPrint('Error al reproducir: $e');
+      return;
+    }
+
+    setState(() {
+      _currentTrackIndex = index;
+      if (_isShuffle) {
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
+        _shuffledIndices.remove(index);
+        _shuffledIndices.insert(0, index);
       }
+    });
+
+    try {
+      await _audioPlayer.setFilePath(_trackList[index].file.path);
+      await _audioPlayer.play();
+    } catch (e) {
+      debugPrint('Error al reproducir: $e');
     }
   }
 
@@ -272,19 +295,98 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     }
   }
 
-  /// Reproduce el siguiente track si existe.
+  /// Reproduce el siguiente track si existe, considerando aleatorio y repetición.
   void _playNext() {
-    if (_currentTrackIndex != null &&
-        _currentTrackIndex! < _trackList.length - 1) {
-      _onTrackSelected(_currentTrackIndex! + 1);
+    if (_trackList.isEmpty || _currentTrackIndex == null) return;
+
+    int? nextIndex;
+
+    if (_isShuffle) {
+      int currentShuffledPos = _shuffledIndices.indexOf(_currentTrackIndex!);
+      if (currentShuffledPos < _shuffledIndices.length - 1) {
+        nextIndex = _shuffledIndices[currentShuffledPos + 1];
+      } else if (_repeatMode == RepeatMode.all) {
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
+        if (_shuffledIndices.first == _currentTrackIndex! && _trackList.length > 1) {
+          final first = _shuffledIndices.removeAt(0);
+          _shuffledIndices.insert(1, first);
+        }
+        nextIndex = _shuffledIndices.first;
+      }
+    } else {
+      if (_currentTrackIndex! < _trackList.length - 1) {
+        nextIndex = _currentTrackIndex! + 1;
+      } else if (_repeatMode == RepeatMode.all) {
+        nextIndex = 0;
+      }
+    }
+
+    if (nextIndex != null) {
+      _onTrackSelected(nextIndex);
     }
   }
 
-  /// Reproduce el track anterior si existe.
+  /// Reproduce el track anterior si existe, considerando aleatorio.
   void _playPrevious() {
-    if (_currentTrackIndex != null && _currentTrackIndex! > 0) {
-      _onTrackSelected(_currentTrackIndex! - 1);
+    if (_trackList.isEmpty || _currentTrackIndex == null) return;
+
+    int? prevIndex;
+
+    if (_isShuffle) {
+      int currentShuffledPos = _shuffledIndices.indexOf(_currentTrackIndex!);
+      if (currentShuffledPos > 0) {
+        prevIndex = _shuffledIndices[currentShuffledPos - 1];
+      } else if (_repeatMode == RepeatMode.all) {
+        prevIndex = _shuffledIndices.last;
+      }
+    } else {
+      if (_currentTrackIndex! > 0) {
+        prevIndex = _currentTrackIndex! - 1;
+      } else if (_repeatMode == RepeatMode.all) {
+        prevIndex = _trackList.length - 1;
+      }
     }
+
+    if (prevIndex != null) {
+      _onTrackSelected(prevIndex);
+    }
+  }
+
+  // --- NUEVO: Alternar modos ---
+  void _toggleShuffle() {
+    setState(() {
+      _isShuffle = !_isShuffle;
+      if (_isShuffle) {
+        if (_repeatMode == RepeatMode.one) {
+          _repeatMode = RepeatMode.all;
+        }
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
+        if (_currentTrackIndex != null) {
+          _shuffledIndices.remove(_currentTrackIndex);
+          _shuffledIndices.insert(0, _currentTrackIndex!);
+        }
+      } else {
+        _shuffledIndices = [];
+      }
+    });
+  }
+
+  void _toggleRepeat() {
+    setState(() {
+      if (_repeatMode == RepeatMode.off) {
+        _repeatMode = RepeatMode.all;
+      } else if (_repeatMode == RepeatMode.all) {
+        _repeatMode = RepeatMode.one;
+        // Al repetir una, el aleatorio se desactiva
+        if (_isShuffle) {
+          _isShuffle = false;
+          _shuffledIndices = [];
+        }
+      } else {
+        // De .one a .off
+        _repeatMode = RepeatMode.off;
+      }
+    });
   }
 
   @override
@@ -472,9 +574,16 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         ? _trackList[_currentTrackIndex!]
         : null;
     final bool hasTrack = track != null;
-    final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
+    final bool canPlayPrev =
+        hasTrack &&
+        (_currentTrackIndex! > 0 ||
+            _repeatMode == RepeatMode.all ||
+            _isShuffle);
     final bool canPlayNext =
-        hasTrack && _currentTrackIndex! < _trackList.length - 1;
+        hasTrack &&
+        (_currentTrackIndex! < _trackList.length - 1 ||
+            _repeatMode == RepeatMode.all ||
+            _isShuffle);
     if (!hasTrack || _isPanelExpanded) {
       return const SizedBox.shrink();
     }
@@ -499,7 +608,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 color: const Color(0xFFFF6B6B),
                 borderRadius: BorderRadius.circular(25),
               ),
-              child: track!.artwork != null
+              child: track.artwork != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.memory(track.artwork!, fit: BoxFit.cover),
@@ -565,21 +674,32 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         ? _trackList[_currentTrackIndex!]
         : null;
     final bool hasTrack = track != null;
-    final bool canPlayPrev = hasTrack && _currentTrackIndex! > 0;
+    final bool canPlayPrev =
+        hasTrack &&
+        (_currentTrackIndex! > 0 ||
+            _repeatMode == RepeatMode.all ||
+            _isShuffle);
     final bool canPlayNext =
-        hasTrack && _currentTrackIndex! < _trackList.length - 1;
+        hasTrack &&
+        (_currentTrackIndex! < _trackList.length - 1 ||
+            _repeatMode == RepeatMode.all ||
+            _isShuffle);
     return hasTrack
         ? Column(
             children: [
               _buildMiniPlayer(),
               Expanded(
                 child: _ExpandedPlayerContent(
-                  track: track!,
+                  track: track,
                   canPlayPrev: canPlayPrev,
                   canPlayNext: canPlayNext,
                   audioPlayer: _audioPlayer,
                   onPlayPrevious: _playPrevious,
                   onPlayNext: _playNext,
+                  isShuffle: _isShuffle,
+                  repeatMode: _repeatMode,
+                  onToggleShuffle: _toggleShuffle,
+                  onToggleRepeat: _toggleRepeat,
                 ),
               ),
             ],
@@ -589,6 +709,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 }
 
 // --- Clases auxiliares al nivel superior ---
+
+// --- NUEVO: Enum para modo de repetición ---
+enum RepeatMode { off, all, one }
 
 /// Botón play/pause optimizado para el minireproductor.
 class _MiniPlayerPlayPause extends StatelessWidget {
@@ -633,6 +756,11 @@ class _ExpandedPlayerContent extends StatelessWidget {
   final AudioPlayer audioPlayer;
   final VoidCallback onPlayPrevious;
   final VoidCallback onPlayNext;
+  // --- NUEVO: Props para shuffle y repeat ---
+  final bool isShuffle;
+  final RepeatMode repeatMode;
+  final VoidCallback onToggleShuffle;
+  final VoidCallback onToggleRepeat;
   const _ExpandedPlayerContent({
     required this.track,
     required this.canPlayPrev,
@@ -640,7 +768,12 @@ class _ExpandedPlayerContent extends StatelessWidget {
     required this.audioPlayer,
     required this.onPlayPrevious,
     required this.onPlayNext,
+    required this.isShuffle,
+    required this.repeatMode,
+    required this.onToggleShuffle,
+    required this.onToggleRepeat,
   });
+
   @override
   Widget build(BuildContext context) {
     final duration = track.duration != null
@@ -672,14 +805,17 @@ class _ExpandedPlayerContent extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: 30),
-          Text(
-            track.title,
-            style: const TextStyle(
-              color: Color(0xFF172438),
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          SizedBox(
+            height: 30,
+            width: 300,
+            child: MarqueeOrStaticText(
+              text: track.title,
+              style: const TextStyle(
+                color: Color(0xFF172438),
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
@@ -692,9 +828,19 @@ class _ExpandedPlayerContent extends StatelessWidget {
           const SizedBox(height: 30),
           _PlayerSlider(audioPlayer: audioPlayer, duration: duration),
           const SizedBox(height: 30),
+          // --- NUEVO: Fila de controles con shuffle y repeat ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              IconButton(
+                icon: Icon(
+                  isShuffle ? Icons.shuffle_on : Icons.shuffle,
+                  color: isShuffle ? Color(0xFF172438) : Colors.grey,
+                  size: 28,
+                ),
+                onPressed: onToggleShuffle,
+                tooltip: 'Aleatorio',
+              ),
               IconButton(
                 icon: Icon(
                   Icons.skip_previous,
@@ -711,6 +857,25 @@ class _ExpandedPlayerContent extends StatelessWidget {
                   size: 32,
                 ),
                 onPressed: canPlayNext ? onPlayNext : null,
+              ),
+              IconButton(
+                icon: Icon(
+                  repeatMode == RepeatMode.off
+                      ? Icons.repeat
+                      : repeatMode == RepeatMode.all
+                      ? Icons.repeat
+                      : Icons.repeat_one,
+                  color: repeatMode == RepeatMode.off
+                      ? Colors.grey
+                      : Color(0xFF172438),
+                  size: 28,
+                ),
+                onPressed: onToggleRepeat,
+                tooltip: repeatMode == RepeatMode.off
+                    ? 'Repetir desactivado'
+                    : repeatMode == RepeatMode.all
+                    ? 'Repetir todo'
+                    : 'Repetir una sola',
               ),
             ],
           ),
@@ -739,9 +904,9 @@ class _PlayerSliderState extends State<_PlayerSlider> {
     if (minutes >= 60) {
       int hours = minutes ~/ 60;
       int remainingMinutes = minutes % 60;
-      return '${hours}:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+      return '$hours:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
     }
-    return '${minutes}:${remainingSeconds.toString().padLeft(2, '0')}';
+    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -838,6 +1003,53 @@ class _ExpandedPlayerPlayPause extends StatelessWidget {
             ),
           ),
         );
+      },
+    );
+  }
+}
+
+class MarqueeOrStaticText extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+  final TextAlign textAlign;
+
+  const MarqueeOrStaticText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.textAlign = TextAlign.center,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final span = TextSpan(text: text, style: style);
+        final painter = TextPainter(
+          text: span,
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+        );
+        painter.layout();
+
+        if (painter.width > constraints.maxWidth) {
+          return Marquee(
+            text: text,
+            style: style,
+            scrollAxis: Axis.horizontal,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            blankSpace: 100.0,
+            velocity: 100.0,
+            pauseAfterRound: const Duration(seconds: 1),
+            startPadding: 10.0,
+            accelerationDuration: const Duration(seconds: 1),
+            accelerationCurve: Curves.linear,
+            decelerationDuration: const Duration(milliseconds: 500),
+            decelerationCurve: Curves.easeOut,
+          );
+        } else {
+          return Text(text, style: style, textAlign: textAlign);
+        }
       },
     );
   }
