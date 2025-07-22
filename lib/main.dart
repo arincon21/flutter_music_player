@@ -625,14 +625,30 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
             Expanded(
               child: SizedBox(
                 width: double.infinity,
-                child: MarqueeOrStaticText(
-                  text: track.title,
-                  style: const TextStyle(
-                    color: Color(0xFF172438),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.left,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 20, // Altura fija para el Marquee
+                      child: MarqueeOrStaticText(
+                        text: track.title,
+                        style: const TextStyle(
+                          color: Color(0xFF172438),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.left,
+                      ),
+                    ),
+                    Text(
+                      track.artist,
+                      style: TextStyle(
+                        color: const Color(0xFF172438).withOpacity(0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1031,10 +1047,10 @@ class MarqueeOrStaticText extends StatelessWidget {
             style: style,
             scrollAxis: Axis.horizontal,
             crossAxisAlignment: CrossAxisAlignment.center,
-            blankSpace: 100.0,
-            velocity: 100.0,
+            blankSpace: 200.0,
+            velocity: 80.0,
             pauseAfterRound: const Duration(seconds: 1),
-            startPadding: 10.0,
+            startPadding: 0,
             accelerationDuration: const Duration(seconds: 1),
             accelerationCurve: Curves.linear,
             decelerationDuration: const Duration(milliseconds: 500),
