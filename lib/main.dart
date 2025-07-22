@@ -272,7 +272,8 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     setState(() {
       _currentTrackIndex = index;
       if (_isShuffle) {
-        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)
+          ..shuffle();
         _shuffledIndices.remove(index);
         _shuffledIndices.insert(0, index);
       }
@@ -306,8 +307,10 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
       if (currentShuffledPos < _shuffledIndices.length - 1) {
         nextIndex = _shuffledIndices[currentShuffledPos + 1];
       } else if (_repeatMode == RepeatMode.all) {
-        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
-        if (_shuffledIndices.first == _currentTrackIndex! && _trackList.length > 1) {
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)
+          ..shuffle();
+        if (_shuffledIndices.first == _currentTrackIndex! &&
+            _trackList.length > 1) {
           final first = _shuffledIndices.removeAt(0);
           _shuffledIndices.insert(1, first);
         }
@@ -360,7 +363,8 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         if (_repeatMode == RepeatMode.one) {
           _repeatMode = RepeatMode.all;
         }
-        _shuffledIndices = List.generate(_trackList.length, (i) => i)..shuffle();
+        _shuffledIndices = List.generate(_trackList.length, (i) => i)
+          ..shuffle();
         if (_currentTrackIndex != null) {
           _shuffledIndices.remove(_currentTrackIndex);
           _shuffledIndices.insert(0, _currentTrackIndex!);
@@ -619,28 +623,17 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.title,
-                    style: const TextStyle(
-                      color: Color(0xFF172438),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              child: SizedBox(
+                width: double.infinity,
+                child: MarqueeOrStaticText(
+                  text: track.title,
+                  style: const TextStyle(
+                    color: Color(0xFF172438),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Text(
-                    track.artist,
-                    style: TextStyle(
-                      color: const Color(0xFF172438).withOpacity(0.6),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                  textAlign: TextAlign.left,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1049,6 +1042,69 @@ class MarqueeOrStaticText extends StatelessWidget {
           );
         } else {
           return Text(text, style: style, textAlign: textAlign);
+        }
+      },
+    );
+  }
+}
+
+class MiniPlayerTitle extends StatelessWidget {
+  final String title;
+  const MiniPlayerTitle({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      color: Color(0xFF172438),
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Si el ancho no es válido, mostrar un Text normal
+        if (constraints.maxWidth.isInfinite || constraints.maxWidth == 0) {
+          return Text(
+            title,
+            style: style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+        final span = TextSpan(text: title, style: style);
+        final painter = TextPainter(
+          text: span,
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+        );
+        painter.layout(maxWidth: constraints.maxWidth);
+
+        if (painter.width > constraints.maxWidth) {
+          return SizedBox(
+            height: 20,
+            width: constraints.maxWidth,
+            child: Marquee(
+              text: title,
+              style: style,
+              scrollAxis: Axis.horizontal,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              blankSpace: 50.0,
+              velocity: 50.0,
+              pauseAfterRound: const Duration(seconds: 1),
+              startPadding: 10.0,
+              accelerationDuration: const Duration(seconds: 1),
+              accelerationCurve: Curves.linear,
+              decelerationDuration: const Duration(milliseconds: 500),
+              decelerationCurve: Curves.easeOut,
+            ),
+          );
+        } else {
+          return Text(
+            title,
+            style: style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
         }
       },
     );
