@@ -1,38 +1,8 @@
-// track_list_widget.dart
-// Widget profesional y optimizado para mostrar la lista de canciones con carátula y metadatos.
-
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../models/track_data.dart';
+import '../utils/formatters.dart';
 
-/// Modelo de datos para una pista de audio.
-class TrackData {
-  final File file;
-  final String title;
-  final String artist;
-  final String album;
-  final String genre;
-  final int? duration; // en segundos
-  final int? year;
-  final int? trackNumber;
-  final String? albumArtist;
-  final Uint8List? artwork;
-
-  TrackData({
-    required this.file,
-    required this.title,
-    required this.artist,
-    required this.album,
-    required this.genre,
-    this.duration,
-    this.year,
-    this.trackNumber,
-    this.albumArtist,
-    this.artwork,
-  });
-}
-
-/// Widget que muestra la lista de canciones y permite seleccionar una para reproducir.
 class TrackListWidget extends StatelessWidget {
   final List<TrackData> trackList;
   final int? currentPlayingIndex;
@@ -45,7 +15,6 @@ class TrackListWidget extends StatelessWidget {
     required this.onTrackSelected,
   });
 
-  /// Construye la carátula del álbum o un ícono por defecto.
   Widget buildAlbumArt(TrackData track) {
     if (track.artwork != null) {
       return ClipRRect(
@@ -64,7 +33,6 @@ class TrackListWidget extends StatelessWidget {
     return buildDefaultAlbumArt(track);
   }
 
-  /// Carátula por defecto basada en el artista.
   Widget buildDefaultAlbumArt(TrackData track) {
     final Color trackColor = getColorFromString(track.artist);
     return Container(
@@ -80,7 +48,6 @@ class TrackListWidget extends StatelessWidget {
     );
   }
 
-  /// Genera un color consistente a partir de un string.
   Color getColorFromString(String text) {
     final int hash = text.hashCode;
     const List<Color> colors = [
@@ -98,27 +65,12 @@ class TrackListWidget extends StatelessWidget {
     return colors[hash.abs() % colors.length];
   }
 
-  /// Formatea la duración en mm:ss o hh:mm:ss.
-  String formatDuration(int? seconds) {
-    if (seconds == null) return '?:??';
-    final int minutes = seconds ~/ 60;
-    final int remainingSeconds = seconds % 60;
-    if (minutes >= 60) {
-      final int hours = minutes ~/ 60;
-      final int remainingMinutes = minutes % 60;
-      return '$hours:${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
-    }
-    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
-
-  /// Formatea el tamaño del archivo en B, KB o MB.
   String formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  /// Muestra un diálogo con los metadatos completos de la pista.
   void showTrackInfo(BuildContext context, TrackData track) async {
     final FileStat stat = await track.file.stat();
     showDialog(
@@ -183,7 +135,6 @@ class TrackListWidget extends StatelessWidget {
     );
   }
 
-  /// Fila de información para el diálogo de metadatos.
   Widget buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
