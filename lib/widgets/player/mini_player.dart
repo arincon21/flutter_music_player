@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../models/track_data.dart';
 import '../../utils/enums.dart';
-import '../marquee.dart';
 import 'player_slider.dart';
 
 class MiniPlayer extends StatelessWidget {

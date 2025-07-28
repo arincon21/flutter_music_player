@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/track_data.dart';
 import '../utils/formatters.dart';
 
-class TrackListWidget extends StatelessWidget {
+class TrackListWidget extends StatefulWidget {
   final List<TrackData> trackList;
   final int? currentPlayingIndex;
   final void Function(int) onTrackSelected;
@@ -14,6 +14,19 @@ class TrackListWidget extends StatelessWidget {
     required this.currentPlayingIndex,
     required this.onTrackSelected,
   });
+
+  @override
+  State<TrackListWidget> createState() => _TrackListWidgetState();
+}
+
+class _TrackListWidgetState extends State<TrackListWidget> {
+  void _hapticFeedback() {
+    // Feedback háptico simple
+    try {
+      Feedback.forTap(context);
+    } catch (_) {}
+  }
+  final Set<int> _favorites = {};
 
   Widget buildAlbumArt(TrackData track) {
     if (track.artwork != null) {
@@ -183,6 +196,9 @@ class TrackListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trackList = widget.trackList;
+    final currentPlayingIndex = widget.currentPlayingIndex;
+    final onTrackSelected = widget.onTrackSelected;
     if (trackList.isEmpty) {
       return Center(
         child: Column(
@@ -195,14 +211,15 @@ class TrackListWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: Colors.white,
+                fontFamily: 'Montserrat',
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Agrega archivos MP3 a tu dispositivo para verlos aquí',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black87),
+              style: TextStyle(color: Colors.white70, fontFamily: 'Montserrat'),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -210,251 +227,294 @@ class TrackListWidget extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               label: const Text('Volver a buscar'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6B7AFF),
+                backgroundColor: const Color(0xFF8F5AFF),
               ),
             ),
           ],
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-            itemCount: trackList.length,
-            itemBuilder: (context, index) {
-              final track = trackList[index];
-              return Align(
-                alignment:
-                    Alignment.centerRight, // Alinea cada item a la derecha
-                child: Container(
-                  width: 220,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Título de categoría (simulando RAIN, FOREST, etc.)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8, bottom: 12),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF6B7AFF),
-                                shape: BoxShape.circle,
-                              ),
+    return Container(
+      color: const Color(0xFF181A20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              itemCount: trackList.length,
+              itemBuilder: (context, index) {
+                final track = trackList[index];
+                final isCurrent = currentPlayingIndex == index;
+                return Align(
+                  alignment: Alignment.centerRight,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOut,
+                    width: 220,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: isCurrent
+                        ? BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFFFD700),
+                              width: 3.5,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              track.genre.toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Tarjeta principal
-                      GestureDetector(
-                        onTap: () => onTrackSelected(index),
-                        child: Container(
-                          width: 200,
-                          height: 185,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
                             boxShadow: [
-                              // Sombra principal - más intensa y cercana
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.4),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                                spreadRadius: -2,
+                                color: Colors.black.withOpacity(0.5),
+                                blurRadius: 24,
+                                offset: const Offset(0, 10),
                               ),
-                              // Sombra secundaria - más suave y extendida
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 32,
-                                offset: const Offset(0, 12),
-                                spreadRadius: -8,
+                            ],
+                          )
+                        : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: isCurrent
+                                      ? const Color(0xFFFFD700)
+                                      : const Color(0xFF8F5AFF),
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                              // Sombra sutil para profundidad adicional
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 48,
-                                offset: const Offset(0, 16),
-                                spreadRadius: -12,
+                              const SizedBox(width: 8),
+                              Text(
+                                track.genre.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white70,
+                                  letterSpacing: 1.2,
+                                  fontFamily: 'Montserrat',
+                                ),
                               ),
                             ],
                           ),
-                          child: Stack(
-                            children: [
-                              // Fondo de la tarjeta (imagen de portada o gradiente)
-                              track.artwork != null
-                                  ? Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(10),
-                                        image: DecorationImage(
-                                          image: MemoryImage(track.artwork!),
-                                          fit: BoxFit.cover,
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            _hapticFeedback();
+                            onTrackSelected(index);
+                          },
+                          child: Container(
+                            width: 200,
+                            height: 185,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.4),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
+                                  spreadRadius: -2,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 32,
+                                  offset: const Offset(0, 12),
+                                  spreadRadius: -8,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 48,
+                                  offset: const Offset(0, 16),
+                                  spreadRadius: -12,
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              children: [
+                                track.artwork != null
+                                    ? Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(16),
+                                          image: DecorationImage(
+                                            image: MemoryImage(track.artwork!),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      )
+                                    : Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(16),
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              getColorFromString(track.artist),
+                                              getColorFromString(track.artist).withOpacity(0.8),
+                                              Colors.black.withOpacity(0.9),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    )
-                                  : Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(10),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            getColorFromString(track.artist),
-                                            getColorFromString(
-                                              track.artist,
-                                            ).withOpacity(0.8),
-                                            Colors.black.withOpacity(0.9),
+                                if (track.artwork == null)
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      image: const DecorationImage(
+                                        image: NetworkImage(
+                                          'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=400&fit=crop&crop=entropy&auto=format&fm=jpg&q=60',
+                                        ),
+                                        fit: BoxFit.cover,
+                                        opacity: 0.15,
+                                      ),
+                                    ),
+                                  ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.7),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(25),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        formatDuration(track.duration),
+                                        style: const TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.w300,
+                                          color: Colors.white,
+                                          fontFamily: 'Montserrat',
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              track.title.length > 50
+                                                  ? '${track.title.substring(0, 20)}...'
+                                                  : track.title,
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white,
+                                                height: 1.2,
+                                                fontFamily: 'Montserrat',
+                                              ),
+                                              maxLines: 2,
+                                            ),
                                           ],
                                         ),
                                       ),
-                                    ),
-                              // Imagen de fondo para textura (solo si no hay artwork)
-                              if (track.artwork == null)
-                                Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    image: const DecorationImage(
-                                      image: NetworkImage(
-                                        'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=400&fit=crop&crop=entropy&auto=format&fm=jpg&q=60',
-                                      ),
-                                      fit: BoxFit.cover,
-                                      opacity: 0.15,
-                                    ),
-                                  ),
-                                ),
-                              // Overlay gradiente
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withOpacity(0.7),
                                     ],
                                   ),
                                 ),
-                              ),
-                              // Contenido de la tarjeta
-                              Padding(
-                                padding: const EdgeInsets.all(25),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Número de la pista (grande)
-                                    Text(
-                                      '${formatDuration(track.duration)}',
-                                      style: const TextStyle(
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.w300,
-                                        color: Colors.white,
-                                      ),
+                                if (isCurrent)
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: Icon(
+                                      Icons.equalizer,
+                                      color: const Color(0xFFFFD700),
+                                      size: 24,
                                     ),
-                                    // Información de la canción
-                                    Expanded(
-                                      flex: 2,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            track.title.length > 50
-                                                ? '${track.title.substring(0, 20)}...'
-                                                : track.title,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w400,
-                                              color: Colors.white,
-                                              height: 1.2,
-                                            ),
-                                            maxLines: 2,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Indicador de reproducción
-                              if (currentPlayingIndex == index)
+                                  ),
+                                // Icono de favorito interactivo
                                 Positioned(
-                                  top: 16,
+                                  bottom: 16,
                                   right: 16,
-                                  child: Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF6B7AFF),
-                                      shape: BoxShape.circle,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      _hapticFeedback();
+                                      setState(() {
+                                        if (_favorites.contains(index)) {
+                                          _favorites.remove(index);
+                                        } else {
+                                          _favorites.add(index);
+                                        }
+                                      });
+                                    },
+                                    child: Tooltip(
+                                      message: _favorites.contains(index)
+                                          ? 'Quitar de favoritos'
+                                          : 'Agregar a favoritos',
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 300),
+                                        child: _favorites.contains(index)
+                                            ? Icon(
+                                                Icons.star,
+                                                key: const ValueKey('fav'),
+                                                color: const Color(0xFFFFD700),
+                                                size: 32,
+                                              )
+                                            : Icon(
+                                                Icons.star_border,
+                                                key: const ValueKey('notfav'),
+                                                color: Colors.white70,
+                                                size: 32,
+                                              ),
+                                      ),
                                     ),
                                   ),
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 30, top: 20),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.share_outlined,
+                                size: 18,
+                                color: Colors.white70,
+                              ),
+                              const SizedBox(width: 12),
+                              // Reemplazado por el icono interactivo en la tarjeta
                             ],
                           ),
                         ),
-                      ),
-                      // Iconos y descripción (como en la imagen)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 30, top: 20),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.share_outlined,
-                              size: 18,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(
-                              Icons.star_outline,
-                              size: 18,
-                              color: Colors.grey[400],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Descripción
-                      Padding(
-                        padding: const EdgeInsets.only(left: 30, top: 10),
-                        child: Row(
-                          children: [
-                            Text(
-                              '${track.artist} • ${formatDuration(track.duration)}',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[400],
-                                height: 1.3,
+                        Padding(
+                          padding: const EdgeInsets.only(left: 30, top: 10),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${track.artist} • ${formatDuration(track.duration)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                  height: 1.3,
+                                  fontFamily: 'Montserrat',
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

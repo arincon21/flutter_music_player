@@ -17,7 +17,7 @@ class ExpandedPlayerContent extends StatelessWidget {
   final VoidCallback onToggleShuffle;
   final VoidCallback onToggleRepeat;
   const ExpandedPlayerContent({
-    Key? key,
+    super.key,
     required this.track,
     required this.canPlayPrev,
     required this.canPlayNext,
@@ -28,72 +28,89 @@ class ExpandedPlayerContent extends StatelessWidget {
     required this.repeatMode,
     required this.onToggleShuffle,
     required this.onToggleRepeat,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Eliminado: duration
+    // Visual premium: gradiente, sombra, bordes dorados, animación sutil
     return LayoutBuilder(
       builder: (context, constraints) {
         return Padding(
           padding: const EdgeInsets.all(0),
           child: Column(
             children: [
-              const SizedBox(height: 50),
-              Container(
-                width: constraints.maxWidth < 240 ? constraints.maxWidth : 240,
-                height: 240,
+              const SizedBox(height: 40),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOut,
+                width: constraints.maxWidth < 260 ? constraints.maxWidth : 260,
+                height: 260,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(40),
-                  color: const Color(0xFFFF6B6B),
-                  border: Border(
-                    top: BorderSide(color: Color(0x42000000), width: 0.5),
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF23272F), Color(0xFF181A20)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Color(0xFFFFD700),
+                    width: 2.5,
                   ),
                 ),
                 child: track.artwork != null
                     ? ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(36),
                         child: Image.memory(track.artwork!, fit: BoxFit.cover),
                       )
                     : const Center(
                         child: Icon(
                           Icons.music_note,
-                          color: Colors.white,
-                          size: 80,
+                          color: Color(0xFF8F5AFF),
+                          size: 90,
                         ),
                       ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 28),
               SizedBox(
-                height: 30,
-                width: constraints.maxWidth < 300 ? constraints.maxWidth : 300,
+                height: 34,
+                width: constraints.maxWidth < 320 ? constraints.maxWidth : 320,
                 child: MarqueeOrStaticText(
                   text: track.title,
                   style: const TextStyle(
-                    color: Color(0xFF172438),
-                    fontSize: 24,
+                    color: Color(0xFFFFD700),
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
+                    fontFamily: 'Montserrat',
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 track.artist,
-                style: TextStyle(
-                  color: Color.fromRGBO(23, 36, 56, 0.6),
-                  fontSize: 16,
+                style: const TextStyle(
+                  color: Color(0xFF8F5AFF),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  fontFamily: 'Montserrat',
                 ),
               ),
-              const SizedBox(height: 30),
-              // Se eliminó el PlayerSlider de aquí
+              const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
                     icon: Icon(
                       isShuffle ? Icons.shuffle_on : Icons.shuffle,
-                      color: isShuffle ? Color(0xFF172438) : Colors.grey,
-                      size: 28,
+                      color: isShuffle ? Color(0xFF8F5AFF) : Colors.grey,
+                      size: 30,
                     ),
                     onPressed: onToggleShuffle,
                     tooltip: 'Aleatorio',
@@ -101,10 +118,8 @@ class ExpandedPlayerContent extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       Icons.skip_previous,
-                      color: canPlayPrev
-                          ? const Color(0xFF172438)
-                          : Colors.grey,
-                      size: 32,
+                      color: canPlayPrev ? Color(0xFFFFD700) : Colors.grey,
+                      size: 36,
                     ),
                     onPressed: canPlayPrev ? onPlayPrevious : null,
                   ),
@@ -112,10 +127,8 @@ class ExpandedPlayerContent extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       Icons.skip_next,
-                      color: canPlayNext
-                          ? const Color(0xFF172438)
-                          : Colors.grey,
-                      size: 32,
+                      color: canPlayNext ? Color(0xFFFFD700) : Colors.grey,
+                      size: 36,
                     ),
                     onPressed: canPlayNext ? onPlayNext : null,
                   ),
@@ -128,8 +141,8 @@ class ExpandedPlayerContent extends StatelessWidget {
                           : Icons.repeat_one,
                       color: repeatMode == RepeatMode.off
                           ? Colors.grey
-                          : Color(0xFF172438),
-                      size: 28,
+                          : Color(0xFF8F5AFF),
+                      size: 30,
                     ),
                     onPressed: onToggleRepeat,
                     tooltip: repeatMode == RepeatMode.off

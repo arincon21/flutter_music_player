@@ -3,7 +3,7 @@ import 'package:just_audio/just_audio.dart';
 
 class MiniPlayerPlayPause extends StatelessWidget {
   final AudioPlayer audioPlayer;
-  const MiniPlayerPlayPause({required this.audioPlayer});
+  const MiniPlayerPlayPause({super.key, required this.audioPlayer});
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<PlayerState>(
@@ -37,7 +37,7 @@ class MiniPlayerPlayPause extends StatelessWidget {
 
 class ExpandedPlayerPlayPause extends StatelessWidget {
   final AudioPlayer audioPlayer;
-  const ExpandedPlayerPlayPause({required this.audioPlayer});
+  const ExpandedPlayerPlayPause({super.key, required this.audioPlayer});
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<PlayerState>(

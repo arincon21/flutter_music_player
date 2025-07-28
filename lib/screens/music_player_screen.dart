@@ -6,6 +6,8 @@ import '../widgets/track_list_widget.dart';
 import '../utils/enums.dart';
 import '../utils/track_finder.dart';
 import '../widgets/player/expanded_player.dart';
+import '../widgets/player/vertical_player_controls.dart';
+import '../widgets/player/audio_visualizer.dart';
 
 class MusicPlayerScreen extends StatefulWidget {
   const MusicPlayerScreen({super.key});
@@ -260,58 +262,42 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF181A20),
       body: Column(
         children: [
-          // Simulación de un borde debajo de la barra de estado
           Container(
             height: MediaQuery.of(context).padding.top,
-            color: Colors.white,
+            color: const Color(0xFF181A20),
           ),
-          const Divider(height: 0.5, thickness: 0.5, color: Color(0x42000000)),
-
-          // Contenido principal arriba
+          const Divider(height: 0.5, thickness: 0.5, color: Color(0xFF23272F)),
           Expanded(
             child: Row(
               children: [
-                Container(
-                  width: 90,
-                  height: double.infinity,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 20),
-                      const Expanded(child: SizedBox()),
-                      _buildControlIcon(
-                        icon: Icons.skip_next,
-                        onTap: _playNext,
+                // Barra vertical de controles premium
+                Column(
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: VerticalPlayerControls(
+                        audioPlayer: _audioPlayer,
+                        isPlaying: _isPlaying,
+                        onPlayPause: _togglePlayPause,
+                        onNext: _playNext,
+                        onPrevious: _playPrevious,
+                        onShuffle: _toggleShuffle,
+                        onRepeat: _toggleRepeat,
+                        volume: _audioPlayer.volume,
+                        onVolumeChanged: (v) => _audioPlayer.setVolume(v),
                       ),
-                      const SizedBox(height: 12),
-                      _buildPlayButton(),
-                      const SizedBox(height: 12),
-                      _buildControlIcon(
-                        icon: Icons.skip_previous,
-                        onTap: _playPrevious,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildControlIcon(
-                        icon: _getRepeatIcon(),
-                        isActive: _repeatMode != RepeatMode.off,
-                        onTap: _toggleRepeat,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildControlIcon(
-                        icon: Icons.shuffle,
-                        isActive: _isShuffle,
-                        onTap: _toggleShuffle,
-                      ),
-                      const SizedBox(height: 30),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    AudioVisualizer(audioPlayer: _audioPlayer),
+                  ],
                 ),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      return Container(
+                      return SizedBox(
                         width: constraints.maxWidth,
                         child: Column(
                           children: [
@@ -324,21 +310,16 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                                 ),
                                 child: TextField(
                                   controller: _searchController,
-                                  style: const TextStyle(color: Colors.black87),
+                                  style: const TextStyle(color: Colors.white),
                                   decoration: InputDecoration(
                                     hintText: 'Buscar por título o artista...',
-                                    hintStyle: TextStyle(color: Colors.black87),
+                                    hintStyle: TextStyle(color: Colors.white70),
                                     prefixIcon: const Icon(
                                       Icons.search,
-                                      color: Colors.black87,
+                                      color: Colors.white70,
                                     ),
                                     filled: true,
-                                    fillColor: const Color.fromARGB(
-                                      40,
-                                      0,
-                                      0,
-                                      0,
-                                    ),
+                                    fillColor: const Color(0xFF23272F),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(16),
                                       borderSide: BorderSide.none,
@@ -353,21 +334,20 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                             ),
                             Expanded(
                               child: Container(
-                                color: Colors.white,
+                                color: const Color(0xFF181A20),
                                 child: _isLoading
                                     ? Center(
                                         child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
+                                          mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             const CircularProgressIndicator(
-                                              color: Colors.black87,
+                                              color: Color(0xFF8F5AFF),
                                             ),
                                             const SizedBox(height: 16),
                                             Text(
                                               _loadingMessage,
                                               style: const TextStyle(
-                                                color: Colors.black87,
+                                                color: Colors.white70,
                                               ),
                                             ),
                                           ],
@@ -379,9 +359,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                                             : _trackList.where((track) {
                                                 return track.title
                                                         .toLowerCase()
-                                                        .contains(
-                                                          _searchText,
-                                                        ) ||
+                                                        .contains(_searchText) ||
                                                     (track.artist
                                                         .toLowerCase()
                                                         .contains(_searchText));
@@ -436,69 +414,4 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
-  Widget _buildControlIcon({
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isActive = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          child: Icon(
-            icon,
-            size: 30,
-            color: isActive ? Color(0xFF6B7AFF) : Colors.black54,
-          ),
-        ),
-      ),
-    );
-  }
-
-  IconData _getRepeatIcon() {
-    switch (_repeatMode) {
-      case RepeatMode.one:
-        return Icons.repeat_one;
-      case RepeatMode.all:
-        return Icons.repeat;
-      case RepeatMode.off:
-        return Icons.repeat;
-    }
-  }
-
-  Widget _buildPlayButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _isPlaying
-            ? Color.fromARGB(18, 107, 122, 255)
-            : const Color.fromARGB(255, 233, 233, 233),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _togglePlayPause, // Usar la función corregida
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            child: Icon(
-              _isPlaying ? Icons.pause : Icons.play_arrow,
-              size: 40,
-              color: _isPlaying ? Color(0xFF6B7AFF) : Colors.black87,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
