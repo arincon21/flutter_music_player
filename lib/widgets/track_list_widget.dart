@@ -18,11 +18,11 @@ class TrackListWidget extends StatelessWidget {
   Widget buildAlbumArt(TrackData track) {
     if (track.artwork != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(20),
         child: Image.memory(
           track.artwork!,
-          width: 50,
-          height: 50,
+          width: 120,
+          height: 120,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return buildDefaultAlbumArt(track);
@@ -36,14 +36,47 @@ class TrackListWidget extends StatelessWidget {
   Widget buildDefaultAlbumArt(TrackData track) {
     final Color trackColor = getColorFromString(track.artist);
     return Container(
-      width: 50,
-      height: 50,
+      width: 120,
+      height: 120,
       decoration: BoxDecoration(
-        color: trackColor,
-        borderRadius: BorderRadius.circular(3),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            trackColor.withOpacity(0.8),
+            trackColor.withOpacity(1.0),
+            Colors.black.withOpacity(0.7),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: const Center(
-        child: Icon(Icons.music_note, color: Colors.white70, size: 24),
+      child: Stack(
+        children: [
+          // Imagen de fondo para simular textura
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              image: DecorationImage(
+                image: NetworkImage(
+                  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=400&fit=crop&crop=entropy&auto=format&fm=jpg&q=60',
+                ),
+                fit: BoxFit.cover,
+                opacity: 0.3,
+              ),
+            ),
+          ),
+          // Overlay oscuro
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -51,16 +84,11 @@ class TrackListWidget extends StatelessWidget {
   Color getColorFromString(String text) {
     final int hash = text.hashCode;
     const List<Color> colors = [
-      Color(0xFFFF6B6B),
-      Color(0xFF6B7AFF),
-      Color(0xFF4ECDC4),
-      Color(0xFFFFD93D),
-      Color(0xFF6BCF7F),
-      Color(0xFFFF8E53),
-      Color(0xFF845EC2),
-      Color(0xFF4E9FFF),
-      Color(0xFFFF6B9D),
-      Color(0xFF95E1D3),
+      Color(0xFF2D2D2D), // Gris oscuro como en la imagen
+      Color(0xFF1A4A3A), // Verde oscuro
+      Color(0xFF3D2A1F), // Marrón oscuro
+      Color(0xFF1F2937), // Azul gris oscuro
+      Color(0xFF374151), // Otro gris
     ];
     return colors[hash.abs() % colors.length];
   }
@@ -76,8 +104,8 @@ class TrackListWidget extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: Text(track.title, style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: Text(track.title, style: const TextStyle(color: Colors.black87)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -117,7 +145,7 @@ class TrackListWidget extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Ruta: ${track.file.path}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: const TextStyle(color: Colors.black87, fontSize: 12),
               ),
             ],
           ),
@@ -140,7 +168,7 @@ class TrackListWidget extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Colors.black87),
           children: [
             TextSpan(
               text: '$label: ',
@@ -167,18 +195,18 @@ class TrackListWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Agrega archivos MP3 a tu dispositivo para verlos aquí',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white60),
+              style: TextStyle(color: Colors.black87),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: null, // Deshabilitado, la recarga la maneja el padre
+              onPressed: null,
               icon: const Icon(Icons.refresh),
               label: const Text('Volver a buscar'),
               style: ElevatedButton.styleFrom(
@@ -190,121 +218,233 @@ class TrackListWidget extends StatelessWidget {
       );
     }
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Música (${trackList.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              GestureDetector(
-                onTap: null, // Deshabilitado, la recarga la maneja el padre
-                child: Container(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: const Icon(
-                    Icons.refresh,
-                    color: Colors.white60,
-                    size: 24,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
             itemCount: trackList.length,
             itemBuilder: (context, index) {
               final track = trackList[index];
-              return GestureDetector(
-                onTap: () => onTrackSelected(index),
+              return Align(
+                alignment:
+                    Alignment.centerRight, // Alinea cada item a la derecha
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: currentPlayingIndex == index
-                        ? const Color(0xFFFFFFFF).withOpacity(0.05)
-                        : Colors.transparent,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 20,
-                  ),
-                  child: Row(
+                  width: 220,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      buildAlbumArt(track),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      // Título de categoría (simulando RAIN, FOREST, etc.)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 12),
+                        child: Row(
                           children: [
-                            Text(
-                              track.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF6B7AFF),
+                                shape: BoxShape.circle,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(width: 8),
                             Text(
-                              track.artist,
+                              track.genre.toUpperCase(),
                               style: const TextStyle(
-                                color: Colors.white60,
-                                fontSize: 12,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey,
+                                letterSpacing: 1.2,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            if (track.album != 'Álbum desconocido')
-                              Text(
-                                track.album,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.4),
-                                  fontSize: 11,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            formatDuration(track.duration),
-                            style: const TextStyle(
-                              color: Colors.white60,
-                              fontSize: 12,
-                            ),
+                      // Tarjeta principal
+                      GestureDetector(
+                        onTap: () => onTrackSelected(index),
+                        child: Container(
+                          width: 200,
+                          height: 185,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              // Sombra principal - más intensa y cercana
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                                spreadRadius: -2,
+                              ),
+                              // Sombra secundaria - más suave y extendida
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 32,
+                                offset: const Offset(0, 12),
+                                spreadRadius: -8,
+                              ),
+                              // Sombra sutil para profundidad adicional
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 48,
+                                offset: const Offset(0, 16),
+                                spreadRadius: -12,
+                              ),
+                            ],
                           ),
-                          if (track.year != null)
+                          child: Stack(
+                            children: [
+                              // Fondo de la tarjeta (imagen de portada o gradiente)
+                              track.artwork != null
+                                  ? Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        image: DecorationImage(
+                                          image: MemoryImage(track.artwork!),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            getColorFromString(track.artist),
+                                            getColorFromString(
+                                              track.artist,
+                                            ).withOpacity(0.8),
+                                            Colors.black.withOpacity(0.9),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                              // Imagen de fondo para textura (solo si no hay artwork)
+                              if (track.artwork == null)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    image: const DecorationImage(
+                                      image: NetworkImage(
+                                        'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=400&fit=crop&crop=entropy&auto=format&fm=jpg&q=60',
+                                      ),
+                                      fit: BoxFit.cover,
+                                      opacity: 0.15,
+                                    ),
+                                  ),
+                                ),
+                              // Overlay gradiente
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.7),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Contenido de la tarjeta
+                              Padding(
+                                padding: const EdgeInsets.all(25),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Número de la pista (grande)
+                                    Text(
+                                      '${formatDuration(track.duration)}',
+                                      style: const TextStyle(
+                                        fontSize: 36,
+                                        fontWeight: FontWeight.w300,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    // Información de la canción
+                                    Expanded(
+                                      flex: 2,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            track.title.length > 50
+                                                ? '${track.title.substring(0, 20)}...'
+                                                : track.title,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w400,
+                                              color: Colors.white,
+                                              height: 1.2,
+                                            ),
+                                            maxLines: 2,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Indicador de reproducción
+                              if (currentPlayingIndex == index)
+                                Positioned(
+                                  top: 16,
+                                  right: 16,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF6B7AFF),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Iconos y descripción (como en la imagen)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 30, top: 20),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.share_outlined,
+                              size: 18,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(width: 12),
+                            Icon(
+                              Icons.star_outline,
+                              size: 18,
+                              color: Colors.grey[400],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Descripción
+                      Padding(
+                        padding: const EdgeInsets.only(left: 30, top: 10),
+                        child: Row(
+                          children: [
                             Text(
-                              track.year.toString(),
+                              '${track.artist} • ${formatDuration(track.duration)}',
+                              textAlign: TextAlign.right,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
-                                fontSize: 10,
+                                fontSize: 12,
+                                color: Colors.grey[400],
+                                height: 1.3,
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => showTrackInfo(context, track),
-                        child: const Icon(
-                          Icons.more_vert,
-                          color: Colors.white60,
-                          size: 20,
+                          ],
                         ),
                       ),
                     ],

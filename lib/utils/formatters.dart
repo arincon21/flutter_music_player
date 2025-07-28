@@ -1,4 +1,3 @@
-
 String formatDuration(int? seconds) {
   if (seconds == null) return '?:??';
   final int minutes = seconds ~/ 60;

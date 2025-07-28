@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../models/track_data.dart';
@@ -41,9 +40,7 @@ class ExpandedPlayer extends StatelessWidget {
     final bool hasTrack = track != null;
     final bool canPlayPrev =
         hasTrack &&
-        (currentTrackIndex! > 0 ||
-            repeatMode == RepeatMode.all ||
-            isShuffle);
+        (currentTrackIndex! > 0 || repeatMode == RepeatMode.all || isShuffle);
     final bool canPlayNext =
         hasTrack &&
         (currentTrackIndex! < trackListLength - 1 ||

@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:sliding_up_panel2/sliding_up_panel2.dart';
 import '../models/track_data.dart';
 import '../widgets/track_list_widget.dart';
 import '../utils/enums.dart';
 import '../utils/track_finder.dart';
-import '../widgets/common/header.dart';
 import '../widgets/player/expanded_player.dart';
-import '../widgets/player/mini_player.dart';
 
 class MusicPlayerScreen extends StatefulWidget {
   const MusicPlayerScreen({super.key});
@@ -25,6 +22,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   String _loadingMessage = 'Buscando archivos MP3...';
   bool _isPanelExpanded = false;
 
+  bool _isPlaying = false;
+
+  // Variables unificadas para shuffle y repeat
   bool _isShuffle = false;
   RepeatMode _repeatMode = RepeatMode.off;
   List<int> _shuffledIndices = [];
@@ -36,7 +36,13 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
+
+    // Escuchar cambios en el estado del reproductor
     _audioPlayer.playerStateStream.listen((state) async {
+      setState(() {
+        _isPlaying = state.playing;
+      });
+
       if (state.processingState == ProcessingState.completed) {
         if (_repeatMode == RepeatMode.one && _currentTrackIndex != null) {
           try {
@@ -50,6 +56,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         }
       }
     });
+
     _loadTracks();
     _searchController.addListener(() {
       setState(() {
@@ -105,18 +112,37 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     }
   }
 
+  // Función para reproducir/pausar
+  void _togglePlayPause() async {
+    if (_currentTrackIndex == null) {
+      // Si no hay canción seleccionada, seleccionar la primera
+      if (_trackList.isNotEmpty) {
+        _onTrackSelected(0);
+      }
+      return;
+    }
+
+    if (_audioPlayer.playing) {
+      await _audioPlayer.pause();
+    } else {
+      await _audioPlayer.play();
+    }
+  }
+
   void _playNext() {
     if (_trackList.isEmpty || _currentTrackIndex == null) return;
 
     int? nextIndex;
 
-    if (_isShuffle) {
+    if (_isShuffle && _shuffledIndices.isNotEmpty) {
       int currentShuffledPos = _shuffledIndices.indexOf(_currentTrackIndex!);
       if (currentShuffledPos < _shuffledIndices.length - 1) {
         nextIndex = _shuffledIndices[currentShuffledPos + 1];
       } else if (_repeatMode == RepeatMode.all) {
+        // Crear nueva lista mezclada
         _shuffledIndices = List.generate(_trackList.length, (i) => i)
           ..shuffle();
+        // Asegurar que no repita la misma canción inmediatamente
         if (_shuffledIndices.first == _currentTrackIndex! &&
             _trackList.length > 1) {
           final first = _shuffledIndices.removeAt(0);
@@ -125,6 +151,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         nextIndex = _shuffledIndices.first;
       }
     } else {
+      // Modo normal (sin shuffle)
       if (_currentTrackIndex! < _trackList.length - 1) {
         nextIndex = _currentTrackIndex! + 1;
       } else if (_repeatMode == RepeatMode.all) {
@@ -134,6 +161,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
     if (nextIndex != null) {
       _onTrackSelected(nextIndex);
+    } else {
+      // Si no hay siguiente canción y no está en repeat all, detener reproducción
+      _audioPlayer.pause();
     }
   }
 
@@ -142,7 +172,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
     int? prevIndex;
 
-    if (_isShuffle) {
+    if (_isShuffle && _shuffledIndices.isNotEmpty) {
       int currentShuffledPos = _shuffledIndices.indexOf(_currentTrackIndex!);
       if (currentShuffledPos > 0) {
         prevIndex = _shuffledIndices[currentShuffledPos - 1];
@@ -150,6 +180,7 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
         prevIndex = _shuffledIndices.last;
       }
     } else {
+      // Modo normal (sin shuffle)
       if (_currentTrackIndex! > 0) {
         prevIndex = _currentTrackIndex! - 1;
       } else if (_repeatMode == RepeatMode.all) {
@@ -159,6 +190,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
     if (prevIndex != null) {
       _onTrackSelected(prevIndex);
+    } else {
+      // Si no hay canción anterior y no está en repeat all, detener reproducción
+      _audioPlayer.pause();
     }
   }
 
@@ -166,74 +200,214 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
     setState(() {
       _isShuffle = !_isShuffle;
       if (_isShuffle) {
+        // Si activamos shuffle y está en repeat one, cambiar a repeat all
         if (_repeatMode == RepeatMode.one) {
           _repeatMode = RepeatMode.all;
         }
+        // Crear lista mezclada
         _shuffledIndices = List.generate(_trackList.length, (i) => i)
           ..shuffle();
+        // Poner la canción actual al principio si existe
         if (_currentTrackIndex != null) {
           _shuffledIndices.remove(_currentTrackIndex);
           _shuffledIndices.insert(0, _currentTrackIndex!);
         }
       } else {
-        _shuffledIndices = [];
+        // Limpiar lista mezclada al desactivar shuffle
+        _shuffledIndices.clear();
       }
     });
+    debugPrint('Shuffle ${_isShuffle ? 'activado' : 'desactivado'}');
   }
 
   void _toggleRepeat() {
     setState(() {
-      if (_repeatMode == RepeatMode.off) {
-        _repeatMode = RepeatMode.all;
-      } else if (_repeatMode == RepeatMode.all) {
-        _repeatMode = RepeatMode.one;
-        if (_isShuffle) {
-          _isShuffle = false;
-          _shuffledIndices = [];
-        }
-      } else {
-        _repeatMode = RepeatMode.off;
+      switch (_repeatMode) {
+        case RepeatMode.off:
+          _repeatMode = RepeatMode.all;
+          break;
+        case RepeatMode.all:
+          _repeatMode = RepeatMode.one;
+          // Si activamos repeat one, desactivar shuffle
+          if (_isShuffle) {
+            _isShuffle = false;
+            _shuffledIndices.clear();
+          }
+          break;
+        case RepeatMode.one:
+          _repeatMode = RepeatMode.off;
+          break;
       }
     });
+
+    // Debug para ver el estado actual
+    String modeText = '';
+    switch (_repeatMode) {
+      case RepeatMode.off:
+        modeText = 'desactivado';
+        break;
+      case RepeatMode.all:
+        modeText = 'repetir todas';
+        break;
+      case RepeatMode.one:
+        modeText = 'repetir una';
+        break;
+    }
+    debugPrint('Modo repeat: $modeText');
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: const Color(0xFF1d2738),
-        body: Stack(
-          children: [
-            _isLoading
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const CircularProgressIndicator(color: Colors.white),
-                        const SizedBox(height: 16),
-                        Text(
-                          _loadingMessage,
-                          style: const TextStyle(color: Colors.white),
+    return Scaffold(
+      extendBody: true,
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // Simulación de un borde debajo de la barra de estado
+          Container(
+            height: MediaQuery.of(context).padding.top,
+            color: Colors.white,
+          ),
+          const Divider(height: 0.5, thickness: 0.5, color: Color(0x42000000)),
+
+          // Contenido principal arriba
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 90,
+                  height: double.infinity,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      const Expanded(child: SizedBox()),
+                      _buildControlIcon(
+                        icon: Icons.skip_next,
+                        onTap: _playNext,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPlayButton(),
+                      const SizedBox(height: 12),
+                      _buildControlIcon(
+                        icon: Icons.skip_previous,
+                        onTap: _playPrevious,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildControlIcon(
+                        icon: _getRepeatIcon(),
+                        isActive: _repeatMode != RepeatMode.off,
+                        onTap: _toggleRepeat,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildControlIcon(
+                        icon: Icons.shuffle,
+                        isActive: _isShuffle,
+                        onTap: _toggleShuffle,
+                      ),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Container(
+                        width: constraints.maxWidth,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: constraints.maxWidth,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                child: TextField(
+                                  controller: _searchController,
+                                  style: const TextStyle(color: Colors.black87),
+                                  decoration: InputDecoration(
+                                    hintText: 'Buscar por título o artista...',
+                                    hintStyle: TextStyle(color: Colors.black87),
+                                    prefixIcon: const Icon(
+                                      Icons.search,
+                                      color: Colors.black87,
+                                    ),
+                                    filled: true,
+                                    fillColor: const Color.fromARGB(
+                                      40,
+                                      0,
+                                      0,
+                                      0,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 0,
+                                      horizontal: 0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Container(
+                                color: Colors.white,
+                                child: _isLoading
+                                    ? Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const CircularProgressIndicator(
+                                              color: Colors.black87,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              _loadingMessage,
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : TrackListWidget(
+                                        trackList: _searchText.isEmpty
+                                            ? _trackList
+                                            : _trackList.where((track) {
+                                                return track.title
+                                                        .toLowerCase()
+                                                        .contains(
+                                                          _searchText,
+                                                        ) ||
+                                                    (track.artist
+                                                        .toLowerCase()
+                                                        .contains(_searchText));
+                                              }).toList(),
+                                        currentPlayingIndex: _currentTrackIndex,
+                                        onTrackSelected: _onTrackSelected,
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  )
-                : _buildTrackListScreen(),
-            SlidingUpPanel(
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Footer SIEMPRE abajo, ocupa todo el ancho
+          SizedBox(
+            width: double.infinity,
+            child: SlidingUpPanel(
               controller: _panelController,
-              minHeight: _currentTrackIndex != null ? 120 : 0,
-              maxHeight: MediaQuery.of(context).size.height - 100,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(40),
-              ),
-              color: const Color(0xFFfafbff),
-              backdropEnabled: false,
-              onPanelSlide: (double pos) {
-                setState(() {
-                  _isPanelExpanded = pos > 0.5;
-                });
-              },
+              minHeight: _currentTrackIndex != null ? 150 : 0,
+              maxHeight: MediaQuery.of(context).size.height,
               panelBuilder: () => ExpandedPlayer(
                 track: _currentTrackIndex != null
                     ? _trackList[_currentTrackIndex!]
@@ -250,62 +424,79 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 currentTrackIndex: _currentTrackIndex,
                 trackListLength: _trackList.length,
               ),
-              body: Container(),
+              onPanelSlide: (double pos) {
+                setState(() {
+                  _isPanelExpanded = pos > 0.5;
+                });
+              },
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlIcon({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          child: Icon(
+            icon,
+            size: 30,
+            color: isActive ? Color(0xFF6B7AFF) : Colors.black54,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTrackListScreen() {
-    List<TrackData> filteredList = _searchText.isEmpty
-        ? _trackList
-        : _trackList.where((track) {
-            return track.title.toLowerCase().contains(_searchText) ||
-                (track.artist.toLowerCase().contains(_searchText));
-          }).toList();
+  IconData _getRepeatIcon() {
+    switch (_repeatMode) {
+      case RepeatMode.one:
+        return Icons.repeat_one;
+      case RepeatMode.all:
+        return Icons.repeat;
+      case RepeatMode.off:
+        return Icons.repeat;
+    }
+  }
+
+  Widget _buildPlayButton() {
     return Container(
-      color: const Color(0xFF1d2738),
-      child: SafeArea(
-        child: Column(
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _isPanelExpanded
-                  ? ExpandedHeader(onCollapse: () => _panelController.close())
-                  : const NormalHeader(),
+      decoration: BoxDecoration(
+        color: _isPlaying
+            ? Color.fromARGB(18, 107, 122, 255)
+            : const Color.fromARGB(255, 233, 233, 233),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _togglePlayPause, // Usar la función corregida
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            child: Icon(
+              _isPlaying ? Icons.pause : Icons.play_arrow,
+              size: 40,
+              color: _isPlaying ? Color(0xFF6B7AFF) : Colors.black87,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Buscar por título o artista...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white),
-                  filled: true,
-                  fillColor: const Color.fromARGB(60, 0, 0, 0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 0,
-                    horizontal: 0,
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: TrackListWidget(
-                trackList: filteredList,
-                currentPlayingIndex: _currentTrackIndex,
-                onTrackSelected: _onTrackSelected,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
